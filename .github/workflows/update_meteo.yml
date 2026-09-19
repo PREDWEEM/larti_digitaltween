@@ -1,0 +1,160 @@
+name: Actualizar meteorología Lartigau
+
+on:
+  schedule:
+    # 08:00 hora Argentina (UTC-3)
+    - cron: "0 11 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: actualizar-meteo-lartigau-twin
+  cancel-in-progress: true
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas requests
+
+      - name: Actualizar histórico archivado y pronóstico MeteoBahía
+        run: python update_meteo.py
+
+      - name: Validar restauración MeteoBahía
+        run: |
+          python - <<'PY'
+          import json
+          from datetime import datetime
+          from pathlib import Path
+          from zoneinfo import ZoneInfo
+
+          import pandas as pd
+          from update_meteo import CAMPANIA_END
+
+          path = Path("meteo_daily.csv")
+          historico_path = Path("data/meteo_falcon_pronosticos_archivados_2026.csv")
+          estado_path = Path("data/estado_actualizacion_meteo.json")
+          if not path.exists() or not historico_path.exists() or not estado_path.exists():
+              raise SystemExit("Faltan el archivo operativo, el histórico o el estado.")
+
+          df = pd.read_csv(path)
+          requeridas = {
+              "Fecha", "TMAX", "TMIN", "Prec", "TMEDIA",
+              "Fuente", "TipoDato", "CalidadDato",
+          }
+          faltantes = requeridas.difference(df.columns)
+          if faltantes:
+              raise SystemExit(f"Faltan columnas: {sorted(faltantes)}")
+
+          fechas = pd.to_datetime(df["Fecha"], errors="coerce")
+          if fechas.isna().any() or fechas.duplicated().any():
+              raise SystemExit("Hay fechas inválidas o duplicadas.")
+
+          esperadas = pd.date_range(fechas.min(), fechas.max(), freq="D")
+          huecos = esperadas.difference(pd.DatetimeIndex(fechas))
+          if len(huecos):
+              raise SystemExit(
+                  f"La serie no es continua: {huecos.strftime('%Y-%m-%d').tolist()}"
+              )
+
+          criticas = df[["TMAX", "TMIN", "TMEDIA", "Prec"]].apply(
+              pd.to_numeric, errors="coerce"
+          )
+          if criticas.isna().any().any():
+              raise SystemExit("Hay valores meteorológicos nulos.")
+          if (criticas["TMAX"] < criticas["TMIN"]).any():
+              raise SystemExit("Hay TMAX menor que TMIN.")
+          if (criticas["Prec"] < 0).any():
+              raise SystemExit("Hay precipitación negativa.")
+
+          hoy = datetime.now(
+              ZoneInfo("America/Argentina/Buenos_Aires")
+          ).date()
+          pasadas = fechas.dt.date < hoy
+          futuras = fechas.dt.date >= hoy
+          if (fechas.dt.date > CAMPANIA_END).any():
+              raise SystemExit("Hay fechas posteriores al cierre de campaña.")
+          if hoy > CAMPANIA_END and fechas.max().date() != CAMPANIA_END:
+              raise SystemExit("La serie cerrada no llega al 1 de octubre.")
+          if not pasadas.any() or (hoy <= CAMPANIA_END and not futuras.any()):
+              raise SystemExit("Deben existir histórico y pronóstico desde hoy.")
+
+          if not df.loc[pasadas, "Fuente"].astype(str).eq(
+              "METEOBAHIA_XML_ARCHIVADO"
+          ).all():
+              raise SystemExit("El histórico no proviene del archivo MeteoBahía.")
+          if not df.loc[pasadas, "TipoDato"].astype(str).eq(
+              "Historico_pronostico"
+          ).all():
+              raise SystemExit("El histórico no está marcado como pronóstico archivado.")
+          if not df.loc[futuras, "Fuente"].astype(str).eq(
+              "METEOBAHIA_XML_CORONEL_FALCON"
+          ).all():
+              raise SystemExit("El tramo futuro no proviene de MeteoBahía XML.")
+          if df["Fuente"].astype(str).str.contains(
+              "ERA5|ECMWF", case=False, regex=True
+          ).any():
+              raise SystemExit("Persisten fuentes ERA5 o ECMWF.")
+
+          archivo = pd.read_csv(historico_path)
+          if set(["Fecha", "TMAX", "TMIN", "Prec"]).difference(archivo.columns):
+              raise SystemExit("El archivo MeteoBahía archivado perdió columnas requeridas.")
+          fechas_archivo = pd.to_datetime(archivo["Fecha"], errors="coerce")
+          if fechas_archivo.isna().any() or fechas_archivo.duplicated().any():
+              raise SystemExit("El archivo MeteoBahía contiene fechas inválidas o duplicadas.")
+          if fechas_archivo.max() < fechas.max():
+              raise SystemExit("El archivo MeteoBahía no incorporó el pronóstico vigente.")
+
+          estado = json.loads(estado_path.read_text(encoding="utf-8"))
+          if estado.get("huecos_finales"):
+              raise SystemExit(
+                  f"El estado reporta huecos: {estado['huecos_finales']}"
+              )
+          if estado.get("fuente_historica") != "METEOBAHIA_XML_ARCHIVADO":
+              raise SystemExit("La fuente histórica del estado es incorrecta.")
+          if estado.get("tipo_historico") != "Historico_pronostico":
+              raise SystemExit("El tipo histórico del estado es incorrecto.")
+          if futuras.any() and estado.get("fuente_pronostico") != (
+              "METEOBAHIA_XML_CORONEL_FALCON"
+          ):
+              raise SystemExit("La fuente futura del estado no es MeteoBahía.")
+
+          print("✅ Histórico archivado + pronóstico MeteoBahía restaurados.")
+          PY
+
+      - name: Guardar archivos actualizados
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            meteo_daily.csv \
+            data/estado_actualizacion_meteo.json \
+            data/meteo_falcon_pronosticos_archivados_2026.csv \
+            data/historico_pronosticos/ || true
+
+          if git diff --cached --quiet; then
+            echo "No hay cambios para guardar."
+            exit 0
+          fi
+
+          git commit -m "Actualiza histórico y pronóstico MeteoBahía Lartigau"
+          git pull --rebase origin main
+          git push origin HEAD:main

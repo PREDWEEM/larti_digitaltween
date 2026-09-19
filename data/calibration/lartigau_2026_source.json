@@ -1,0 +1,27 @@
+{
+  "uploaded_filename": "VALIDA (1) (4)(1).xlsx",
+  "uploaded_sha256": "dd81b1ef1d26e5852e71b4b28a1f3653ebf2aeabe6baa743d58d23c4fc95ec3a",
+  "original_file": "lartigau_2026_original.xlsx",
+  "sheet": "Hoja1",
+  "site_assigned_by_user": "Lartigau",
+  "units": "plantas/m² por intervalo entre conteos",
+  "initial_zero_reference": "2026-02-01",
+  "weather_repository": "https://github.com/PREDWEEM/LOLIUM_LARTIGAU-2026",
+  "weather_commit": "afc421c52695a3a721e3327bcde2ef72ebaef9e0",
+  "weather_source_path": "meteo_daily.csv",
+  "weather_source_sha256": "4c44bd50bcf4a7c368e5331e5ce96fc14fdaa8577d118b3f6839744c00073bb1",
+  "weather_start": "2026-01-01",
+  "weather_end": "2026-08-30",
+  "weather_rows": 242,
+  "weather_nature": "Pronósticos MeteoBahía archivados de Coronel Falcón; no observaciones de estación",
+  "validation_cutoffs": [
+    "2026-04-24",
+    "2026-05-12",
+    "2026-05-27",
+    "2026-06-17",
+    "2026-07-03",
+    "2026-07-16",
+    "2026-07-31",
+    "2026-08-15"
+  ]
+}
