@@ -181,7 +181,10 @@ def test_calibration_keeps_lartigau_decay_and_shared_reference(real_data):
     assert saved["model_parameters"]["decay_cap_fraction"] == .5
     assert saved["seasonal_reference"]["include_patterns"] == []
     assert saved["seasonal_reference"]["excluded_years"] == ["2010", "2015"]
-    assert saved["seasonal_reference"]["n_campaigns"] == 11
+    assert saved["seasonal_reference"]["excluded_sites"] == ["balcarce", "san pedro"]
+    assert "balcarce" not in saved["seasonal_reference"]["campaigns"].lower()
+    assert "san pedro" not in saved["seasonal_reference"]["campaigns"].lower()
+    assert saved["seasonal_reference"]["n_campaigns"] == 9
 
 
 def test_fit_matches_persisted_profile_and_does_not_mutate_network(real_data):

@@ -9,13 +9,18 @@ import numpy as np
 import pandas as pd
 
 
+EXCLUDED_SITES = ("balcarce", "san pedro")
+
+
 def load_seasonal_reference(
     source: str | Path,
     excluded_years: tuple[str, ...] = ("2010", "2015"),
     include_patterns: tuple[str, ...] | None = None,
+    excluded_sites: tuple[str, ...] = EXCLUDED_SITES,
 ) -> pd.DataFrame:
     """Construye percentiles de progreso y permite una referencia local.
 
+    Balcarce y San Pedro se excluyen antes de calcular los percentiles.
     ``include_patterns`` filtra por nombre de campaña sin distinguir
     mayúsculas. El clasificador original no incluye una campaña identificada
     como Lartigau. Por defecto se utiliza la referencia compartida, excluyendo
@@ -33,20 +38,20 @@ def load_seasonal_reference(
     names = [str(value) for value in payload.get("names", payload.get("files", []))]
     if curves.ndim != 2 or len(julian_days) != curves.shape[1]:
         raise ValueError("La referencia histórica no contiene curvas compatibles.")
-    if names and len(names) == len(curves):
-        patterns = tuple(
-            str(pattern).lower() for pattern in (include_patterns or ())
-        )
-        keep = np.array([
-            not any(year in name for year in excluded_years)
-            and (
-                not patterns
-                or any(pattern in name.lower() for pattern in patterns)
-            )
-            for name in names
-        ])
-        curves = curves[keep]
-        names = [name for name, selected in zip(names, keep) if selected]
+    if len(names) != len(curves) or any(not name.strip() for name in names):
+        raise ValueError("La referencia requiere un nombre por curva para filtrar años y localidades.")
+    patterns = tuple(" ".join(str(value).casefold().split()) for value in (include_patterns or ()))
+    sites = tuple(" ".join(str(value).casefold().split()) for value in excluded_sites)
+    normalized_names = [" ".join(name.casefold().split()) for name in names]
+    keep = np.array([
+        not any(year in name for year in excluded_years)
+        and not any(site in normalized for site in sites)
+        and (not patterns or any(pattern in normalized for pattern in patterns))
+        for name, normalized in zip(names, normalized_names)
+    ], dtype=bool)
+    excluded_names = [name for name, selected in zip(names, keep) if not selected]
+    curves = curves[keep]
+    names = [name for name, selected in zip(names, keep) if selected]
     if include_patterns and not len(curves):
         raise ValueError(
             "La referencia histórica no contiene campañas para: "
@@ -65,6 +70,7 @@ def load_seasonal_reference(
             "Progreso_Mediano": np.median(progress, axis=0),
             "Progreso_P90": np.quantile(progress, 0.90, axis=0),
             "N_Campanas": int(valid.sum()),
+            "Campanas_Excluidas": ", ".join(excluded_names),
             "Campanas": ", ".join(
                 name for name, selected in zip(names, valid) if selected
             ) if names else "",

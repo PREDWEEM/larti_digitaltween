@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "method": "monotone_logit_v1",
-  "profile_id": "lartigau-2026-08-30-v1-e4874f288a",
+  "profile_id": "lartigau-2026-08-30-v1-1642536a5c",
   "site": "Lartigau",
   "status": "experimental_una_campana",
   "training_year": 2026,
@@ -18,17 +18,17 @@
     "n_intervals": 14,
     "observed_window_total_plm2": 3933.5,
     "rmse_base_plm2": 306.7604081205812,
-    "rmse_calibrated_plm2": 269.0532771545776,
-    "weighted_mse_base": 3.2256918808275663,
-    "weighted_mse_calibrated": 2.4814232084452392,
+    "rmse_calibrated_plm2": 269.0459095696268,
+    "weighted_mse_base": 3.225691880827566,
+    "weighted_mse_calibrated": 2.481287310855232,
     "regularization": 0.05,
-    "nuisance_scale_base": 3935.427556354133,
-    "nuisance_scale_calibrated": 3945.1119741081698,
+    "nuisance_scale_base": 3936.4104520016544,
+    "nuisance_scale_calibrated": 3949.1547898834006,
     "parameter_at_bound": false
   },
   "observations_start": "2026-02-01",
   "initial_zero_reference": true,
-  "model_fingerprint": "413055433e24668e17319d6ad162e597fbe4904b99b72efa1acdae67aa9d9869",
+  "model_fingerprint": "1ca4e3cdb39977484bcbdd40ce25399968c1efcce6a50ad3e7228f0963fe880d",
   "model_parameters": {
     "cobertura_pct": 75.0,
     "w_max": 18.816,
@@ -58,9 +58,14 @@
       "2010",
       "2015"
     ],
+    "excluded_sites": [
+      "balcarce",
+      "san pedro"
+    ],
+    "excluded_campaigns": "2015.xlsx, 2010.xlsx, emererel2025 balcarce.xlsx, emrel sp 2025 san pedro.xlsx",
     "scope": "Referencia compartida; sin campaña histórica identificada como Lartigau",
-    "n_campaigns": 11,
-    "campaigns": "2012.xlsx, 2009.xlsx, 2013.xlsx, 2024.xlsx, 2023.xlsx, 2014.xlsx, 2008.xlsx, 2011.xlsx, test -emerel tresas 2025.xlsx, emererel2025 balcarce.xlsx, emrel sp 2025 san pedro.xlsx"
+    "n_campaigns": 9,
+    "campaigns": "2012.xlsx, 2009.xlsx, 2013.xlsx, 2024.xlsx, 2023.xlsx, 2014.xlsx, 2008.xlsx, 2011.xlsx, test -emerel tresas 2025.xlsx"
   },
   "source": {
     "uploaded_filename": "VALIDA (1) (4)(1).xlsx",
@@ -104,8 +109,8 @@
     "independent_season": false,
     "n_intervals": 8,
     "note": "Ajuste con datos hasta cada corte y evaluación del siguiente intervalo. Se utiliza la serie histórica de pronósticos MeteoBahía archivados, sin garantizar la emisión disponible en cada corte. No demuestra transferencia a otra campaña ni precisión operativa a siete días.",
-    "rmse_base_plm2": 182.9205011924217,
-    "rmse_calibrated_plm2": 595.9830318212806,
+    "rmse_base_plm2": 199.43032647583684,
+    "rmse_calibrated_plm2": 384.8072963996211,
     "intervals_improved": 3
   },
   "limitations": [

@@ -38,8 +38,8 @@ coberturas, Wmax y exponente Kr.
   Si no existe emergencia previa al 15/04, el original no impone un techo.
 - Tiempo térmico triangular 2–20–30 °C; banda operativa 600–800 °Cd.
 
-La normalización de una serie parcial utiliza las 11 campañas del clasificador
-original que quedan al excluir 2010 y 2015. No existe en el archivo una campaña
+La normalización de una serie parcial utiliza las nueve campañas del clasificador
+original que quedan al excluir 2010, 2015, Balcarce y San Pedro. No existe en el archivo una campaña
 identificada como Lartigau. Se informa explícitamente como referencia compartida.
 La normalización parcial es una extensión del gemelo, distinta de la
 normalización del período completo del modelo original.
@@ -60,3 +60,17 @@ y en el perfil `lartigau_2026.json`.
 La capa de calibración transforma la salida normalizada; no cambia los pesos
 neuronales ni el reloj térmico. Los resultados del ajuste y de la evaluación
 temporal se conservan por separado. El perfil es experimental de una campaña.
+
+## Exclusión de Balcarce y San Pedro
+
+Se excluyen `emererel2025 balcarce.xlsx` y `emrel sp 2025 san pedro.xlsx`
+antes de calcular P10, mediana y P90. El filtro ignora mayúsculas y espacios
+repetidos y exige un nombre por curva. Quedan ocho archivos identificados
+sólo por año (2008, 2009, 2011–2014, 2023 y 2024) y Tres Arroyos 2025.
+La localidad de los ocho archivos no se infiere de sus nombres.
+
+Se regeneran el perfil 2026 y los diagnósticos con los mismos datos y cortes;
+el fingerprint incluye el código de selección. El perfil registra filtros,
+cantidad y nombres incluidos/excluidos. La interfaz recarga la referencia
+en cada ejecución para evitar datos obsoletos de Streamlit. Se conserva el
+mecanismo de anclaje estacional, así como la ANN y la fisiología del sitio.

@@ -52,13 +52,26 @@ Desde el 15 de abril aplica el techo del 50 % del máximo previo, con decaimient
 2–20–30 °C. [MODEL_PROVENANCE.md](MODEL_PROVENANCE.md) registra la revisión
 de origen, las ecuaciones y los hashes de los activos.
 
-Para series meteorológicas parciales utiliza las 11 campañas del clasificador
-original que quedan al excluir 2010 y 2015. Esta referencia es compartida:
+Para series meteorológicas parciales utiliza las nueve campañas del clasificador
+original que quedan al excluir 2010, 2015, Balcarce y San Pedro. Esta referencia es compartida:
 el archivo no contiene una campaña identificada como Lartigau. La calibración
 local 2026 se aplica sobre esa trayectoria. El total emergido durante el período
 muestreado no se supone igual al potencial estacional completo. Al cargar
 conteos, el potencial se estima a partir de sus intervalos o se utiliza un
 valor previo aportado por el usuario.
+
+La selección conserva 2008, 2009, 2011, 2012, 2013, 2014, 2023 y 2024
+(archivos identificados sólo por año), y Tres Arroyos 2025. No se atribuyen
+todas estas series a la localidad del gemelo. Los nombres utilizados y
+excluidos se muestran en Trazabilidad y en el perfil de calibración.
+La referencia se recarga en cada ejecución para evitar curvas o columnas
+obsoletas en la caché de Streamlit.
+
+El perfil 2026 y sus diagnósticos se regeneraron con esta selección, conservando
+los conteos, meteorología fija, fechas de corte, ANN y parámetros fisiológicos.
+Aplicación, escenarios y ajuste utilizan los mismos filtros. El cálculo
+conserva su anclaje a la mediana histórica; esta revisión modifica la selección
+de referencias. Los resultados siguientes corresponden a las nueve curvas.
 
 ## Meteorología 2026
 
@@ -106,7 +119,7 @@ muestreo medido.
 | Evaluación | RMSE base | RMSE calibrado |
 |---|---:|---:|
 | Ajuste retrospectivo, 14 intervalos | 306,76 | 269,05 |
-| Evaluación temporal, 8 intervalos posteriores | 182,92 | 595,98 |
+| Evaluación temporal, 8 intervalos posteriores | 199,43 | 384,81 |
 
 Los RMSE se expresan en plantas/m² por intervalo. El ajuste retrospectivo
 reduce el error en 12,3 %, pero la evaluación temporal **empeora**: mejora 3 de

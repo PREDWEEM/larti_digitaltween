@@ -69,8 +69,8 @@ def load_model():
     return PracticalANNModel.from_directory(BASE / "models")
 
 
-@st.cache_data(show_spinner=False)
 def load_progress_reference():
+    """Recarga la referencia vigente; evita curvas o columnas obsoletas en caché."""
     return load_seasonal_reference(
         BASE / "models" / "modelo_clusters_k3.pkl",
         excluded_years=("2010", "2015"),
@@ -402,8 +402,12 @@ if source_option == "MeteoBahía · Coronel Falcón":
     )
 st.caption(
     f"Referencia estacional compartida: {reference_campaigns} campañas del clasificador "
-    "original, excluyendo 2010 y 2015. No hay una serie histórica identificada "
+    "original, excluyendo 2010, 2015, Balcarce y San Pedro. No hay una serie histórica identificada "
     "como Lartigau; la calibración local utiliza los conteos 2026."
+)
+st.caption(
+    "La selección conserva ocho curvas identificadas por año y Tres Arroyos 2025. "
+    "Los nombres utilizados y excluidos se muestran en Trazabilidad."
 )
 if not forecast_metadata["complete"]:
     st.warning(
@@ -968,6 +972,8 @@ with tab_scenarios:
 
 with tab_audit:
     st.subheader("Trazabilidad científica")
+    st.write("Campañas utilizadas: " + seasonal_reference["Campanas"].iloc[0])
+    st.caption("Campañas excluidas: " + seasonal_reference["Campanas_Excluidas"].iloc[0])
     st.write(calibration_audit["reason"])
     if calibration_audit["profile_id"]:
         st.caption(f'Perfil: {calibration_audit["profile_id"]}')
@@ -1000,7 +1006,7 @@ with tab_audit:
                     f"beta={parameters.decay_beta:.5f}; "
                     f"intensidad={parameters.decay_intensity:.2f}"
                 ),
-                f"Clasificador original; n={reference_campaigns} campañas; excluye 2010 y 2015",
+                f"Clasificador original; n={reference_campaigns} campañas; excluye 2010, 2015, Balcarce y San Pedro",
             ],
         }
     )

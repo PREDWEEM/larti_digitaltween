@@ -24,7 +24,7 @@ from predweem_twin.calibration import (  # noqa: E402
 )
 from predweem_twin.core import ModelParameters, PracticalANNModel, run_predweem  # noqa: E402
 from predweem_twin.observations import prepare_observations, read_observation_file  # noqa: E402
-from predweem_twin.seasonal import load_seasonal_reference  # noqa: E402
+from predweem_twin.seasonal import EXCLUDED_SITES, load_seasonal_reference  # noqa: E402
 
 
 def build_calibration(observations_path, weather_path, output_path, site="Lartigau",
@@ -144,6 +144,8 @@ def build_calibration(observations_path, weather_path, output_path, site="Lartig
         "seasonal_reference": {
             "include_patterns": [],
             "excluded_years": ["2010", "2015"],
+            "excluded_sites": list(EXCLUDED_SITES),
+            "excluded_campaigns": reference["Campanas_Excluidas"].iloc[0],
             "scope": "Referencia compartida; sin campaña histórica identificada como Lartigau",
             "n_campaigns": int(reference["N_Campanas"].iloc[0]),
             "campaigns": reference["Campanas"].iloc[0],
