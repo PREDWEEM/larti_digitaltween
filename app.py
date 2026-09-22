@@ -9,9 +9,9 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-from plotly.subplots import make_subplots
 
 from predweem_twin.assimilation import assimilate_observations
+from predweem_twin.charts import annual_historical_reference, trajectory_charts
 from predweem_twin.calibration import (
     apply_site_calibration, load_site_profile, model_fingerprint,
 )
@@ -23,11 +23,10 @@ from predweem_twin.coverage import (
 from predweem_twin.core import ModelParameters, PracticalANNModel, run_predweem
 from predweem_twin.observations import prepare_observations, read_observation_file
 from predweem_twin.scenarios import apply_scenario
-from predweem_twin.seasonal import load_seasonal_reference
+from predweem_twin.seasonal import load_local_seasonal_reference
 from predweem_twin.state import (
     build_twin_snapshot,
     milestone_dates,
-    thermal_window_dates,
 )
 from predweem_twin.storage import TwinStore
 from predweem_twin.weather import (
@@ -41,14 +40,19 @@ from predweem_twin.weather import (
 
 BASE = Path(__file__).parent
 CALIBRATION_DIR = BASE / "data" / "calibration"
-st.set_page_config(page_title="PREDWEEM Digital Twin", page_icon="🌱", layout="wide")
+st.set_page_config(
+    page_title="PREDWEEM Digital Twin", page_icon="🌱", layout="wide",
+    initial_sidebar_state="collapsed",
+)
 
 st.markdown(
     """
     <style>
       .stApp {background: linear-gradient(180deg,#f5f8f3 0%,#eef3ed 100%);}
-      [data-testid="stSidebar"] {background:#11291f;}
-      [data-testid="stSidebar"] * {color:#f5faf7;}
+      [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"],
+      [data-testid="stExpandSidebarButton"] {
+        display:none !important;
+      }
       div[data-testid="stMetric"] {background:white;border:1px solid #dfe8e1;
         border-radius:16px;padding:18px;box-shadow:0 8px 22px rgba(20,50,35,.06)}
       .hero {padding:22px 26px;border-radius:20px;color:white;margin-bottom:18px;
@@ -69,12 +73,9 @@ def load_model():
     return PracticalANNModel.from_directory(BASE / "models")
 
 
-def load_progress_reference():
+def load_progress_reference(as_of=None):
     """Recarga la referencia vigente; evita curvas o columnas obsoletas en caché."""
-    return load_seasonal_reference(
-        BASE / "models" / "modelo_clusters_k3.pkl",
-        excluded_years=("2010", "2015"),
-    )
+    return load_local_seasonal_reference(BASE, as_of=as_of)
 
 
 def load_store():
@@ -92,128 +93,6 @@ def load_open_meteo(latitude, longitude, start_date):
     return fetch_open_meteo(latitude, longitude, start_date)
 
 
-def trajectory_chart(
-    df,
-    observations,
-    as_of,
-    audit=None,
-    lower_thermal_time=600.0,
-    upper_thermal_time=800.0,
-):
-    figure = make_subplots(specs=[[{"secondary_y": True}]])
-    figure.add_trace(
-        go.Bar(
-            x=df["Fecha"],
-            y=df["EMERREL_TWIN"] * 100,
-            name="Flujo diario Twin",
-            marker_color="#3b82f6",
-            opacity=0.62,
-        ),
-        secondary_y=True,
-    )
-    figure.add_trace(
-        go.Scatter(
-            x=df["Fecha"],
-            y=df.get("EMERAC_BASE_SIN_CALIBRAR", df["EMERAC_NORMALIZADA"]) * 100,
-            name="PREDWEEM base",
-            line=dict(color="#83938b", width=2, dash="dot"),
-        ),
-        secondary_y=False,
-    )
-    if "Calibracion_Aplicada" in df and df["Calibracion_Aplicada"].any():
-        figure.add_trace(
-            go.Scatter(
-                x=df["Fecha"], y=df["EMERAC_CALIBRADA"] * 100,
-                name="Calibración Lartigau", line=dict(color="#9260bd", width=2),
-            ),
-            secondary_y=False,
-        )
-    figure.add_trace(
-        go.Scatter(
-            x=df["Fecha"],
-            y=df["EMERAC_TWIN"] * 100,
-            name="Estado actualizado",
-            line=dict(color="#155d3e", width=4),
-            fill="tozeroy",
-            fillcolor="rgba(66,137,87,.10)",
-        ),
-        secondary_y=False,
-    )
-    if audit is not None and not audit.empty and "Estado_campo_estimado" in audit:
-        figure.add_trace(
-            go.Scatter(
-                x=audit["Fecha_asimilada"],
-                y=audit["Estado_campo_estimado"] * 100,
-                name="Estado estimado desde campo",
-                mode="markers",
-                marker=dict(color="#df5b3f", size=11, line=dict(color="white", width=2)),
-            ),
-            secondary_y=False,
-        )
-    elif observations is not None and not observations.empty:
-        figure.add_trace(
-            go.Scatter(
-                x=observations["Fecha"],
-                y=observations["Observado"] * 100,
-                name="Conteo de campo",
-                mode="markers",
-                marker=dict(color="#df5b3f", size=11, line=dict(color="white", width=2)),
-            ),
-            secondary_y=False,
-        )
-    thermal_start, thermal_end = thermal_window_dates(
-        df, lower_thermal_time, upper_thermal_time
-    )
-    if thermal_start is not None:
-        displayed_thermal_end = thermal_end or pd.Timestamp(df["Fecha"].max())
-        figure.add_vrect(
-            x0=thermal_start,
-            x1=displayed_thermal_end,
-            fillcolor="rgba(255,193,7,.22)",
-            line_width=0,
-            annotation_text=(
-                f"Ventana fenológica {lower_thermal_time:.0f}–"
-                f"{upper_thermal_time:.0f} °Cd"
-            ),
-            annotation_position="top right",
-            annotation_font_color="#6f5200",
-        )
-        figure.add_vline(
-            x=thermal_start.timestamp() * 1000,
-            line_color="#c48a00",
-            line_dash="dot",
-            line_width=1.5,
-        )
-        if thermal_end is not None:
-            figure.add_vline(
-                x=thermal_end.timestamp() * 1000,
-                line_color="#c48a00",
-                line_dash="dot",
-                line_width=1.5,
-            )
-    figure.add_vline(x=pd.Timestamp(as_of).timestamp() * 1000, line_color="#162f25", line_dash="dash")
-    forecast_start = pd.Timestamp(as_of) + pd.Timedelta(days=1)
-    if pd.Timestamp(df["Fecha"].max()) >= forecast_start:
-        figure.add_vrect(
-            x0=forecast_start,
-            x1=pd.Timestamp(df["Fecha"].max()),
-            fillcolor="rgba(223,127,52,.10)",
-            line_width=0,
-            annotation_text="Pronóstico 7 días",
-            annotation_position="top left",
-        )
-    figure.update_yaxes(title_text="Emergencia acumulada (%)", range=[0, 105], secondary_y=False)
-    figure.update_yaxes(title_text="Flujo diario (%)", rangemode="tozero", secondary_y=True)
-    figure.update_layout(
-        height=470,
-        margin=dict(l=10, r=10, t=30, b=10),
-        legend=dict(orientation="h", y=1.12),
-        hovermode="x unified",
-        plot_bgcolor="white",
-        paper_bgcolor="rgba(0,0,0,0)",
-        bargap=0.15,
-    )
-    return figure
 
 
 st.markdown(
@@ -228,48 +107,57 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-with st.sidebar:
-    st.markdown("## Configuración del gemelo")
-    site_id = st.text_input("Identificador del lote", "Lartigau-01")
-    calibration_site = st.selectbox("Localidad del lote", ["Lartigau", "Otra localidad"])
-    latitude = st.number_input("Latitud", value=-38.6166, format="%.6f")
-    longitude = st.number_input("Longitud", value=-61.7000, format="%.6f")
-    source_option = st.radio(
-        "Meteorología",
-        ["MeteoBahía · Coronel Falcón", "Open-Meteo", "Cargar archivo"],
-    )
-    uploaded_weather = None
-    if source_option == "Cargar archivo":
-        uploaded_weather = st.file_uploader("CSV o Excel", type=["csv", "xlsx", "xls"])
-    coverage_mode = st.radio(
-        "Cobertura de rastrojo",
-        ["Constante", "Serie observada"],
-        help=(
-            "La serie observada se carga por lote con las columnas "
-            "FECHA + COBERTURA_PCT."
-        ),
-    )
-    coverage = st.slider(
-        "Cobertura constante o de respaldo (%)", 0, 100, 75, 5
-    )
-    w_max = st.number_input(
-        "Agua superficial Wmax (mm)", min_value=5.0, max_value=60.0,
-        value=18.816, step=0.1, format="%.3f",
-    )
-    model_uncertainty = st.slider("Incertidumbre del modelo", 0.03, 0.30, 0.12, 0.01)
-    seasonal_potential_input = st.number_input(
-        "Potencial estacional previo (plantas/m²)",
-        min_value=0.0,
-        value=0.0,
-        step=100.0,
-        help=(
-            "Use 0 para estimación automática. Ingrese un valor histórico "
-            "del lote si está disponible."
-        ),
-    )
-    seasonal_potential_prior = (
-        float(seasonal_potential_input) if seasonal_potential_input > 0 else None
-    )
+with st.expander("Configuración del gemelo", expanded=True):
+    lot_column, weather_column, parameter_column = st.columns(3, gap="large")
+    with lot_column:
+        st.markdown("**Lote y fecha**")
+        site_id = st.text_input("Identificador del lote", "Lartigau-01")
+        calibration_site = st.selectbox("Localidad del lote", ["Lartigau", "Otra localidad"])
+        latitude = st.number_input("Latitud", value=-38.6166, format="%.6f")
+        longitude = st.number_input("Longitud", value=-61.7000, format="%.6f")
+        # La fecha necesita la meteorología; se reserva aquí su lugar visible.
+        date_control = st.container()
+    with weather_column:
+        st.markdown("**Meteorología y cobertura**")
+        source_option = st.radio(
+            "Meteorología",
+            ["MeteoBahía · Coronel Falcón", "Open-Meteo", "Cargar archivo"],
+        )
+        uploaded_weather = None
+        if source_option == "Cargar archivo":
+            uploaded_weather = st.file_uploader("CSV o Excel", type=["csv", "xlsx", "xls"])
+        coverage_mode = st.radio(
+            "Cobertura de rastrojo",
+            ["Constante", "Serie observada"],
+            help=(
+                "La serie observada se carga por lote con las columnas "
+                "FECHA + COBERTURA_PCT."
+            ),
+        )
+        coverage = st.slider(
+            "Cobertura constante o de respaldo (%)", 0, 100, 75, 5
+        )
+        coverage_notice = st.empty()
+    with parameter_column:
+        st.markdown("**Parámetros del gemelo**")
+        w_max = st.number_input(
+            "Agua superficial Wmax (mm)", min_value=5.0, max_value=60.0,
+            value=18.816, step=0.1, format="%.3f",
+        )
+        model_uncertainty = st.slider("Incertidumbre del modelo", 0.03, 0.30, 0.12, 0.01)
+        seasonal_potential_input = st.number_input(
+            "Potencial estacional previo (plantas/m²)",
+            min_value=0.0,
+            value=0.0,
+            step=100.0,
+            help=(
+                "Use 0 para estimación automática. Ingrese un valor histórico "
+                "del lote si está disponible."
+            ),
+        )
+        seasonal_potential_prior = (
+            float(seasonal_potential_input) if seasonal_potential_input > 0 else None
+        )
     st.markdown("**Perfil fisiológico Lartigau**")
     st.caption(
         "Latencia JD 25 · desde el 15/04, techo del 50 % del máximo previo "
@@ -295,7 +183,7 @@ max_date = weather_dates.max().date()
 last_observed_date = pd.Timestamp(last_observed_weather_date(weather)).date()
 max_state_date = min(last_observed_date, max_date)
 default_date = min(max(date.today(), min_date), max_state_date)
-as_of = st.sidebar.date_input(
+as_of = date_control.date_input(
     "Fecha del estado",
     value=default_date,
     min_value=min_date,
@@ -313,8 +201,10 @@ parameters = ModelParameters(
     longitud=float(longitude),
 )
 model = load_model()
-seasonal_reference = load_progress_reference()
+seasonal_reference = load_progress_reference(as_of)
 reference_campaigns = int(seasonal_reference["N_Campanas"].iloc[0])
+reference_years = seasonal_reference["Campanas_Anos"].iloc[0]
+reference_2026_from = pd.Timestamp(seasonal_reference["Referencia_2026_Desde"].iloc[0])
 store = load_store()
 coverage_observations = store.coverage_observations(site_id)
 active_coverage = coverage_observations[
@@ -327,7 +217,7 @@ coverage_series_for_model = (
     else None
 )
 if coverage_mode == "Serie observada" and active_coverage.empty:
-    st.sidebar.warning(
+    coverage_notice.warning(
         "No hay cobertura observada disponible hasta esta fecha. "
         "Se utiliza el valor de respaldo."
     )
@@ -375,6 +265,7 @@ snapshot = build_twin_snapshot(
     as_of,
     source_label,
     len(assimilation_audit),
+    seasonal_reference=seasonal_reference,
 )
 snapshot["calibration"] = calibration_audit
 milestones = milestone_dates(twin_trajectory)
@@ -401,18 +292,33 @@ if source_option == "MeteoBahía · Coronel Falcón":
         "no son observaciones meteorológicas de estación."
     )
 st.caption(
-    f"Referencia estacional compartida: {reference_campaigns} campañas del clasificador "
-    "original, excluyendo 2010, 2015, Balcarce y San Pedro. No hay una serie histórica identificada "
-    "como Lartigau; la calibración local utiliza los conteos 2026."
+    f"Pool de referencia de Lartigau: {reference_years} "
+    f"({reference_campaigns} campaña{'s' if reference_campaigns > 1 else ''}). "
+    "Las campañas aportan el mismo peso. Los percentiles son descriptivos y "
+    "preliminares con tan pocos años; no son intervalos de confianza. "
+    "Se excluyen Balcarce, San Pedro, 2010, 2015 y Tres Arroyos 2025. "
+    "Las ocho series previas están identificadas sólo por año; no se atribuyen todas a Lartigau."
 )
-st.caption(
-    "La selección conserva ocho curvas identificadas por año y Tres Arroyos 2025. "
-    "Los nombres utilizados y excluidos se muestran en Trazabilidad."
-)
+if seasonal_reference.attrs["source_2026"]["used"]:
+    st.caption(
+        f"La referencia 2026 usa el total registrado del 01/02 al {reference_2026_from:%d/%m/%Y}. "
+        "Se interpola el acumulado entre visitas. No se conocen nacimientos anteriores "
+        "al inicio y el final del archivo no certifica el fin de la emergencia."
+    )
+    if pd.Timestamp(as_of).year == 2026:
+        st.caption(
+            "La referencia 2026 incorpora información conocida al cierre de ese período. "
+            "La revisión de esta campaña es retrospectiva, no una validación predictiva independiente."
+        )
+else:
+    st.caption(
+        f"La referencia 2026 se habilita desde el {reference_2026_from:%d/%m/%Y}. "
+        "Para este corte se utilizan únicamente las ocho series previas."
+    )
 if not forecast_metadata["complete"]:
     st.warning(
-        "El horizonte meteorológico está incompleto. Los indicadores futuros "
-        "se calculan solamente con los días disponibles."
+        "El horizonte meteorológico está incompleto. La proyección muestra los días "
+        "disponibles; la intensidad semanal requiere siete días completos."
     )
 if snapshot["last_observation_date"]:
     st.caption(
@@ -431,9 +337,59 @@ if coverage_series_for_model is not None:
 metric_columns = st.columns(5)
 metric_columns[0].metric("Emergencia estimada", f'{snapshot["emergence"]:.0%}')
 metric_columns[1].metric("Emergencia remanente", f'{snapshot["remaining"]:.0%}')
-metric_columns[2].metric("Riesgo próximos 7 días", snapshot["risk_7d"], f'+{snapshot["increment_7d"]:.1%}')
+intensity_lights = {"Alta": "🔴", "Media": "🟠", "Baja": "🟡", "Nula": "🟢"}
+intensity_level = snapshot["intensity_7d"]
+intensity_light = intensity_lights.get(intensity_level, "⚪")
+metric_columns[2].metric(
+    "Intensidad de emergencia · 7 días", f"{intensity_light} {intensity_level}",
+    (f'{snapshot["intensity_7d_ratio"]:.1%} del máximo histórico'
+     if snapshot["intensity_7d_ratio"] is not None
+     else f'{snapshot["forecast_days_7d"]}/7 días disponibles'),
+    delta_color="off",
+    help=(
+        "Suma del flujo previsto desde mañana hasta siete días después, dividida por "
+        "el máximo semanal del pool histórico (semanas completas de lunes a domingo). "
+        "Nula (verde): flujo semanal igual a cero; Baja (amarillo): flujo positivo "
+        "menor al 25 % del máximo; Media (naranja): del 25 al 75 % inclusive; "
+        "Alta (rojo): más del 75 %. Sin datos suficientes se muestra gris. "
+        "Es una intensidad relativa de emergencia, no una probabilidad."
+    ),
+)
 metric_columns[3].metric("Agua superficial", f'{snapshot["soil_water"]:.1f} mm', f'{snapshot["soil_water_fraction"]:.0%} Wmax')
-metric_columns[4].metric("TT desde primer pico", f'{snapshot["thermal_time"]:.0f} °Cd', f'{parameters.tt_limite:.0f} °Cd límite')
+thermal_lights = {
+    "FUERA DE CONTROL": "🔴", "ULTIMO PLAZO": "🟠",
+    "CONTROL A TIEMPO": "🟡", "AUN NO CONTROLAR": "🟢",
+}
+thermal_stage = snapshot["thermal_control_stage"]
+metric_columns[4].metric(
+    "TT desde primer pico",
+    f'{snapshot["thermal_time"]:.1f} °Cd' if np.isfinite(snapshot["thermal_time"]) else "—",
+    f'{thermal_lights.get(thermal_stage, "⚪")} {thermal_stage}',
+    delta_color="off",
+    help=(
+        "Semáforo del tiempo térmico desde el primer pico: "
+        "🔴 FUERA DE CONTROL: >800 °Cd; 🟠 ULTIMO PLAZO: >700 y ≤800 °Cd; "
+        "🟡 CONTROL A TIEMPO: ≥600 y ≤700 °Cd; 🟢 AUN NO CONTROLAR: <600 °Cd. "
+        "La categoría se calcula con el TT sin redondear."
+    ),
+)
+if snapshot["intensity_7d_ratio"] is not None:
+    st.caption(
+        f'Intensidad de emergencia: flujo previsto {snapshot["increment_7d"]:.2%} del total estacional '
+        f'/ máximo semanal histórico {snapshot["historical_weekly_max"]:.2%} del total histórico '
+        f'= {snapshot["intensity_7d_ratio"]:.1%} del máximo · 7/7 días. '
+    )
+else:
+    st.caption("Intensidad de emergencia: " + snapshot["intensity_7d_reason"])
+st.caption(
+    "🔴 Alta: >75 % del máximo histórico · 🟠 Media: 25–75 % · "
+    "🟡 Baja: >0 y <25 % · 🟢 Nula: flujo semanal = 0."
+)
+st.caption(
+    "TT desde primer pico: 🔴 FUERA DE CONTROL: >800 °Cd · "
+    "🟠 ULTIMO PLAZO: >700 y ≤800 °Cd · 🟡 CONTROL A TIEMPO: ≥600 y ≤700 °Cd · "
+    "🟢 AUN NO CONTROLAR: <600 °Cd."
+)
 
 tab_state, tab_observations, tab_calibration, tab_scenarios, tab_audit = st.tabs(
     ["Estado del lote", "Observaciones", "Calibración por sitio", "Escenarios", "Trazabilidad"]
@@ -465,16 +421,57 @@ with tab_state:
         ),
     )
     st.caption(calibration_audit["reason"])
-    st.plotly_chart(
-        trajectory_chart(
-            twin_trajectory,
-            active_observations,
-            as_of,
-            assimilation_audit,
-            parameters.tt_control,
-            parameters.tt_limite,
-        ),
-        width="stretch",
+    flow_frequency = st.radio(
+        "Mostrar flujo", ["Semanal", "Diario"], horizontal=True,
+        key="flow_frequency",
+        help="La vista semanal suma ambos flujos de lunes a domingo y conserva el total acumulado.",
+    )
+    daily_figure, cumulative_figure = trajectory_charts(
+        twin_trajectory,
+        active_observations,
+        as_of,
+        assimilation_audit,
+        parameters.tt_control,
+        parameters.tt_limite,
+        seasonal_reference=seasonal_reference,
+        flow_frequency=flow_frequency,
+    )
+    daily_column, cumulative_column = st.columns(2)
+    with daily_column:
+        st.subheader(f"Flujo {flow_frequency.lower()} de emergencia")
+        st.plotly_chart(daily_figure, width="stretch", key="daily_emergence_chart")
+        st.caption(
+            f"Ambas barras usan la misma escala: % del total por {'semana' if flow_frequency == 'Semanal' else 'día'} "
+            "(2 % = +2 puntos porcentuales del acumulado). "
+            "Histórico: total de las ventanas registradas; gemelo: total estacional estimado. "
+            "La interpolación entre visitas y la combinación de campañas suavizan los picos históricos."
+        )
+        if flow_frequency == "Semanal":
+            st.caption(
+                "Semanas de lunes a domingo: suma de los flujos diarios. "
+                "Las barras rayadas son parciales; al pasar el cursor se indican los días incluidos "
+                "y si contienen proyección. Compare semanas completas en ambas series."
+            )
+    with cumulative_column:
+        st.subheader("Emergencia acumulada")
+        st.plotly_chart(cumulative_figure, width="stretch", key="cumulative_emergence_chart")
+    historical_view = annual_historical_reference(seasonal_reference, as_of)
+    historical_at_cutoff = historical_view.loc[
+        historical_view["Fecha"].eq(pd.Timestamp(as_of)), "Progreso_Mediano"
+    ].iloc[0]
+    if pd.notna(historical_at_cutoff):
+        st.caption(
+            f"Referencia local {reference_years} al {pd.Timestamp(as_of):%d/%m}: "
+            f"{historical_at_cutoff:.1%} acumulado y "
+            f"{max(0.0, 1.0 - historical_at_cutoff):.1%} remanente histórico orientativo. "
+            "Estos porcentajes describen el pool histórico, no el estado actualizado del lote."
+        )
+    st.caption(
+        "Fondo tenue: trayectoria histórica orientativa. Barras y curvas de mayor contraste: "
+        "gemelo con la meteorología disponible y proyección de hasta siete días. "
+        "El flujo histórico diario se deriva de las curvas; no son conteos diarios. "
+        "El 100 % corresponde al total de las ventanas históricas registradas. "
+        "El tramo sin referencia disponible no equivale a ausencia de nuevos nacimientos."
     )
     left, right = st.columns([1.35, 1])
     with left:
@@ -914,7 +911,7 @@ with tab_calibration:
             "lartigau_2026_counts.csv", "text/csv",
         )
         st.caption(
-            'Los conteos se conservan como referencia de calibración. Para asimilarlos '
+            'Los conteos integran el pool histórico y la calibración. Para asimilarlos '
             'en un lote, cargue este CSV en Observaciones. La carga mantiene las reglas '
             'existentes de incorporación y borrado de datos.'
         )
@@ -946,18 +943,23 @@ with tab_scenarios:
         seasonal_potential_prior=seasonal_potential_prior,
     )
     scenario_snapshot = build_twin_snapshot(
-        scenario_twin, site_id, as_of, "Escenario", len(assimilation_audit)
+        scenario_twin, site_id, as_of, "Escenario", len(assimilation_audit),
+        seasonal_reference=seasonal_reference,
     )
     scenario_milestones = milestone_dates(scenario_twin)
     comparison = pd.DataFrame(
         {
-            "Indicador": ["Incremento próximos 7 días", "Riesgo", "d50", "d75", "d95"],
+            "Indicador": ["Flujo próximos 7 días (% del total)", "Flujo / máximo semanal histórico", "Intensidad de emergencia", "d50", "d75", "d95"],
             "Escenario base": [
-                f'{snapshot["increment_7d"]:.1%}', snapshot["risk_7d"],
+                (f'{snapshot["increment_7d"]:.2%}' if snapshot["increment_7d"] is not None else "No evaluable"),
+                (f'{snapshot["intensity_7d_ratio"]:.1%}' if snapshot["intensity_7d_ratio"] is not None else "No evaluable"),
+                f'{intensity_lights.get(snapshot["intensity_7d"], "⚪")} {snapshot["intensity_7d"]}',
                 milestones["d50"], milestones["d75"], milestones["d95"],
             ],
             "Escenario simulado": [
-                f'{scenario_snapshot["increment_7d"]:.1%}', scenario_snapshot["risk_7d"],
+                (f'{scenario_snapshot["increment_7d"]:.2%}' if scenario_snapshot["increment_7d"] is not None else "No evaluable"),
+                (f'{scenario_snapshot["intensity_7d_ratio"]:.1%}' if scenario_snapshot["intensity_7d_ratio"] is not None else "No evaluable"),
+                f'{intensity_lights.get(scenario_snapshot["intensity_7d"], "⚪")} {scenario_snapshot["intensity_7d"]}',
                 scenario_milestones["d50"], scenario_milestones["d75"], scenario_milestones["d95"],
             ],
         }
@@ -974,6 +976,20 @@ with tab_audit:
     st.subheader("Trazabilidad científica")
     st.write("Campañas utilizadas: " + seasonal_reference["Campanas"].iloc[0])
     st.caption("Campañas excluidas: " + seasonal_reference["Campanas_Excluidas"].iloc[0])
+    with st.expander("Curvas de la referencia local"):
+        st.dataframe(seasonal_reference, hide_index=True, width="stretch")
+        st.caption(
+            "Progreso entre 0 y 1. Antes del primer conteo de 2026, la mediana usa "
+            "las ocho series previas. Al incorporar otra curva se conserva el avance previo "
+            "para evitar un retroceso del acumulado; los cuantiles originales "
+            "se muestran como Empirico. Después del último conteo, 2026 mantiene "
+            "el total de su ventana como supuesto de referencia; no son nuevas observaciones."
+        )
+        st.download_button(
+            "Descargar referencia local utilizada (CSV)",
+            seasonal_reference.to_csv(index=False).encode("utf-8"),
+            "lartigau_referencia_local.csv", "text/csv",
+        )
     st.write(calibration_audit["reason"])
     if calibration_audit["profile_id"]:
         st.caption(f'Perfil: {calibration_audit["profile_id"]}')
@@ -984,7 +1000,7 @@ with tab_audit:
                 "Horizonte pronosticado", "Cobertura", "Wmax",
                 "Incertidumbre modelo", "Potencial previo", "Modo de asimilación",
                 "Observaciones asimiladas", "Perfil fisiológico",
-                "Decaimiento desde 15/04", "Referencia estacional compartida",
+                "Decaimiento desde 15/04", "Pool de referencia",
             ],
             "Valor": [
                 site_id, source_label,
@@ -1006,7 +1022,7 @@ with tab_audit:
                     f"beta={parameters.decay_beta:.5f}; "
                     f"intensidad={parameters.decay_intensity:.2f}"
                 ),
-                f"Clasificador original; n={reference_campaigns} campañas; excluye 2010, 2015, Balcarce y San Pedro",
+                f"{reference_years}; n={reference_campaigns}; excluye 2010, 2015, Balcarce, San Pedro y Tres Arroyos 2025",
             ],
         }
     )

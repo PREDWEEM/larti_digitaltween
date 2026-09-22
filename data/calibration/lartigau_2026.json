@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "method": "monotone_logit_v1",
-  "profile_id": "lartigau-2026-08-30-v1-1642536a5c",
+  "profile_id": "lartigau-2026-08-30-v1-92adff035f",
   "site": "Lartigau",
   "status": "experimental_una_campana",
   "training_year": 2026,
@@ -28,7 +28,7 @@
   },
   "observations_start": "2026-02-01",
   "initial_zero_reference": true,
-  "model_fingerprint": "1ca4e3cdb39977484bcbdd40ce25399968c1efcce6a50ad3e7228f0963fe880d",
+  "model_fingerprint": "625a63da28283a79bc9d240fde0947577a0d6d7b7c5083eb0ac6d7fe62fdc13a",
   "model_parameters": {
     "cobertura_pct": 75.0,
     "w_max": 18.816,
@@ -53,7 +53,6 @@
     "decay_cap_fraction": 0.5
   },
   "seasonal_reference": {
-    "include_patterns": [],
     "excluded_years": [
       "2010",
       "2015"
@@ -62,10 +61,23 @@
       "balcarce",
       "san pedro"
     ],
-    "excluded_campaigns": "2015.xlsx, 2010.xlsx, emererel2025 balcarce.xlsx, emrel sp 2025 san pedro.xlsx",
-    "scope": "Referencia compartida; sin campaña histórica identificada como Lartigau",
+    "excluded_campaigns": "2015.xlsx, 2010.xlsx, test -emerel tresas 2025.xlsx, emererel2025 balcarce.xlsx, emrel sp 2025 san pedro.xlsx",
+    "scope": "Ocho series identificadas sólo por año más los conteos locales Lartigau 2026",
     "n_campaigns": 9,
-    "campaigns": "2012.xlsx, 2009.xlsx, 2013.xlsx, 2024.xlsx, 2023.xlsx, 2014.xlsx, 2008.xlsx, 2011.xlsx, test -emerel tresas 2025.xlsx"
+    "campaigns": "2012.xlsx, 2009.xlsx, 2013.xlsx, 2024.xlsx, 2023.xlsx, 2014.xlsx, 2008.xlsx, 2011.xlsx, lartigau_2026_counts.csv",
+    "years": "2008, 2009, 2011, 2012, 2013, 2014, 2023, 2024, 2026",
+    "source_2026": {
+      "path": "data/calibration/lartigau_2026_counts.csv",
+      "sha256": "a8fed69cc03ece6ce1276c3819b36e3fa9a18c2e934cbeaa380b8b24284b6ca5",
+      "start": "2026-02-01",
+      "end": "2026-08-30",
+      "sample_count": 15,
+      "window_total_plm2": 3933.5,
+      "used": true,
+      "processing": "acumulado / total registrado; interpolación lineal entre visitas",
+      "scope": "ventana registrada; no certifica el cierre biológico de la campaña"
+    },
+    "note": "Igual peso por campaña. Excluye Tres Arroyos 2025. Los cortes previos al último conteo usan sólo las ocho series previas."
   },
   "source": {
     "uploaded_filename": "VALIDA (1) (4)(1).xlsx",
@@ -109,8 +121,8 @@
     "independent_season": false,
     "n_intervals": 8,
     "note": "Ajuste con datos hasta cada corte y evaluación del siguiente intervalo. Se utiliza la serie histórica de pronósticos MeteoBahía archivados, sin garantizar la emisión disponible en cada corte. No demuestra transferencia a otra campaña ni precisión operativa a siete días.",
-    "rmse_base_plm2": 199.43032647583684,
-    "rmse_calibrated_plm2": 384.8072963996211,
+    "rmse_base_plm2": 199.43032647583703,
+    "rmse_calibrated_plm2": 447.53730958143876,
     "intervals_improved": 3
   },
   "limitations": [
@@ -119,7 +131,7 @@
     "Cobertura de 75 % y Wmax de 18.816 mm son supuestos de la configuración operativa; el archivo no informa manejo ni cobertura.",
     "El archivo FECHA + PLM2 no incluye repeticiones. Se utiliza un piso de ponderación común, no un error de muestreo medido.",
     "Se conserva el techo del 50 % y decaimiento desde el 15/04 del motor Lartigau. No se incorpora extinción post-pico de otra localidad.",
-    "La referencia estacional es compartida, no una validación histórica local de Lartigau.",
+    "Las ocho series identificadas sólo por año son una referencia compartida; el pool agrega Lartigau 2026 y no constituye una validación local independiente.",
     "La meteorología corresponde a pronósticos MeteoBahía archivados, no a observaciones de estación.",
     "La transformación no crea cohortes en fechas bloqueadas por el motor biofísico.",
     "Un parámetro en su límite indica que persisten diferencias estructurales.",

@@ -24,7 +24,7 @@ from predweem_twin.calibration import (  # noqa: E402
 )
 from predweem_twin.core import ModelParameters, PracticalANNModel, run_predweem  # noqa: E402
 from predweem_twin.observations import prepare_observations, read_observation_file  # noqa: E402
-from predweem_twin.seasonal import EXCLUDED_SITES, load_seasonal_reference  # noqa: E402
+from predweem_twin.seasonal import EXCLUDED_SITES, EXCLUDED_YEARS, load_local_seasonal_reference  # noqa: E402
 
 
 def build_calibration(observations_path, weather_path, output_path, site="Lartigau",
@@ -50,15 +50,14 @@ def build_calibration(observations_path, weather_path, output_path, site="Lartig
     if "TipoDato" in weather and weather["TipoDato"].eq("Pronostico").any():
         raise ValueError("La calibración histórica no admite filas de pronóstico.")
     model = PracticalANNModel.from_directory(ROOT / "models")
-    reference = load_seasonal_reference(
-        ROOT / "models/modelo_clusters_k3.pkl", excluded_years=("2010", "2015"),
-    )
+    reference = load_local_seasonal_reference(ROOT, as_of=last_count)
     parameters = ModelParameters(cobertura_pct=coverage, w_max=w_max)
 
     def simulate(cutoff, end=None):
         return run_predweem(
             weather.loc[weather["Fecha"] <= (end if end is not None else cutoff)],
-            model, parameters, normalization_as_of=cutoff, seasonal_reference=reference,
+            model, parameters, normalization_as_of=cutoff,
+            seasonal_reference=load_local_seasonal_reference(ROOT, as_of=cutoff),
         )
 
     trajectory = simulate(last_count)
@@ -142,13 +141,15 @@ def build_calibration(observations_path, weather_path, output_path, site="Lartig
         "model_fingerprint": model_fingerprint(ROOT),
         "model_parameters": asdict(parameters),
         "seasonal_reference": {
-            "include_patterns": [],
-            "excluded_years": ["2010", "2015"],
+            "excluded_years": list(EXCLUDED_YEARS),
             "excluded_sites": list(EXCLUDED_SITES),
             "excluded_campaigns": reference["Campanas_Excluidas"].iloc[0],
-            "scope": "Referencia compartida; sin campaña histórica identificada como Lartigau",
+            "scope": "Ocho series identificadas sólo por año más los conteos locales Lartigau 2026",
             "n_campaigns": int(reference["N_Campanas"].iloc[0]),
             "campaigns": reference["Campanas"].iloc[0],
+            "years": reference["Campanas_Anos"].iloc[0],
+            "source_2026": reference.attrs["source_2026"],
+            "note": "Igual peso por campaña. Excluye Tres Arroyos 2025. Los cortes previos al último conteo usan sólo las ocho series previas.",
         },
         "source": {
             **source_metadata,
@@ -168,7 +169,7 @@ def build_calibration(observations_path, weather_path, output_path, site="Lartig
             f"Cobertura de {coverage:g} % y Wmax de {w_max:g} mm son supuestos de la configuración operativa; el archivo no informa manejo ni cobertura.",
             "El archivo FECHA + PLM2 no incluye repeticiones. Se utiliza un piso de ponderación común, no un error de muestreo medido.",
             "Se conserva el techo del 50 % y decaimiento desde el 15/04 del motor Lartigau. No se incorpora extinción post-pico de otra localidad.",
-            "La referencia estacional es compartida, no una validación histórica local de Lartigau.",
+            "Las ocho series identificadas sólo por año son una referencia compartida; el pool agrega Lartigau 2026 y no constituye una validación local independiente.",
             "La meteorología corresponde a pronósticos MeteoBahía archivados, no a observaciones de estación.",
             "La transformación no crea cohortes en fechas bloqueadas por el motor biofísico.",
             "Un parámetro en su límite indica que persisten diferencias estructurales.",

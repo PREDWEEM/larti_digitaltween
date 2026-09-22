@@ -45,9 +45,11 @@ Si ocurre lo último, vuelva a habilitar el workflow desde Actions.
 
 ## Funcionamiento
 
-- **Estado del lote:** emergencia acumulada, flujo diario con barras azules,
-  curva base, curva calibrada, estado actualizado y banda amarilla 600–800 °Cd.
-  El eje horizontal muestra fechas calendario.
+- **Estado del lote:** gráficos de flujo y acumulado a la par, selector
+  Semanal/Diario, fondo histórico orientativo y eje hasta el 1 de octubre.
+  Mantiene las curvas base, calibrada y actualizada y la banda 600–800 °Cd.
+- **Configuración:** integrada en el cuerpo mediante un desplegable, sin panel lateral.
+- **Indicadores:** intensidad de emergencia a siete días y semáforo térmico.
 - **Calibración local 2026:** activada por defecto. El interruptor sobre el
   gráfico principal permite desactivarla y reactivarla. La selección persiste
   durante la sesión y actualiza estado, gráfico, escenarios y exportación.
@@ -77,26 +79,104 @@ Desde el 15 de abril aplica el techo del 50 % del máximo previo, con decaimient
 2–20–30 °C. [MODEL_PROVENANCE.md](MODEL_PROVENANCE.md) registra la revisión
 de origen, las ecuaciones y los hashes de los activos.
 
-Para series meteorológicas parciales utiliza las nueve campañas del clasificador
-original que quedan al excluir 2010, 2015, Balcarce y San Pedro. Esta referencia es compartida:
-el archivo no contiene una campaña identificada como Lartigau. La calibración
-local 2026 se aplica sobre esa trayectoria. El total emergido durante el período
-muestreado no se supone igual al potencial estacional completo. Al cargar
-conteos, el potencial se estima a partir de sus intervalos o se utiliza un
-valor previo aportado por el usuario.
+Para series meteorológicas parciales, el acumulado base se ancla a la mediana
+histórica en la fecha del estado. El total disponible al final del pronóstico
+no se interpreta como el 100 % de la emergencia. Los conteos actualizan ese
+estado y permiten estimar el potencial estacional por intervalos o utilizar
+un valor previo aportado por el usuario.
 
-La selección conserva 2008, 2009, 2011, 2012, 2013, 2014, 2023 y 2024
-(archivos identificados sólo por año), y Tres Arroyos 2025. No se atribuyen
-todas estas series a la localidad del gemelo. Los nombres utilizados y
-excluidos se muestran en Trazabilidad y en el perfil de calibración.
-La referencia se recarga en cada ejecución para evitar curvas o columnas
-obsoletas en la caché de Streamlit.
+El pool reúne **nueve referencias**: **2008, 2009, 2011, 2012, 2013, 2014,
+2023, 2024 y Lartigau 2026**. Las primeras ocho son archivos identificados
+sólo por año; esos nombres no acreditan que todas procedan de Lartigau.
+Una lista explícita impide incorporar automáticamente otras curvas. Se excluyen
+2010, 2015, Balcarce, San Pedro y Tres Arroyos 2025 **antes** de calcular
+P10, mediana y P90. El clasificador original permanece intacto.
 
-El perfil 2026 y sus diagnósticos se regeneraron con esta selección, conservando
-los conteos, meteorología fija, fechas de corte, ANN y parámetros fisiológicos.
-Aplicación, escenarios y ajuste utilizan los mismos filtros. El cálculo
-conserva su anclaje a la mediana histórica; esta revisión modifica la selección
-de referencias. Los resultados siguientes corresponden a las nueve curvas.
+**Disponibilidad temporal:** el total de Lartigau 2026 se conoce desde el
+último conteo del **30/08/2026**. Los cortes anteriores usan sólo las ocho
+series previas. Desde esa fecha, incluidas las consultas de 2027, participan
+las nueve referencias. La aplicación, los escenarios y cada corte de las
+evaluaciones de calibración utilizan el mismo criterio.
+
+Para 2026 se emplean los 15 registros de
+`data/calibration/lartigau_2026_counts.csv`, del 01/02 al 30/08. Se suma
+`PLM2`, se divide por el total registrado (**3933,5 plantas/m²**) y se
+interpola el acumulado entre visitas. Cada una de las nueve campañas tiene
+**igual peso**, independientemente de su densidad. No se promedia primero el
+resumen de las ocho curvas con 2026 como dos grupos de igual peso.
+
+Antes del 01/02, la curva 2026 queda desconocida y el resumen usa las ocho
+curvas previas. Para evitar retrocesos al cambiar la composición disponible,
+se conserva el máximo acumulado de cada cuantil. Las columnas `*_Empirico`
+permiten auditar los cuantiles sin esa regularización. Después del último
+conteo, 2026 mantiene el total de su ventana como supuesto de referencia:
+no son nuevas observaciones ni prueba de cierre biológico de la campaña.
+Los percentiles describen el pool; no son intervalos de confianza.
+
+La interfaz y el perfil JSON registran campañas utilizadas y excluidas.
+**Trazabilidad → Curvas de la referencia local** permite descargar el pool,
+incluyendo las nueve curvas normalizadas y el número de campañas por día.
+Incorporar 2026 al pool no carga esos conteos como observaciones de un lote.
+
+Sin siete días futuros, el sistema conserva el estado disponible y muestra una
+advertencia de horizonte incompleto; no presupone que la campaña terminó.
+
+### Gráficos y configuración
+
+La configuración aparece en el cuerpo, sin panel lateral. La vista principal
+presenta **dos gráficos a la par**: flujo y emergencia acumulada, con eje
+temporal del 1 de enero al **1 de octubre**. El selector **Semanal/Diario**
+se inicia en Semanal. El fondo tenue muestra únicamente el **pool histórico
+orientativo**, sin curvas individuales de años; continúa después de la fecha
+del estado para visualizar la trayectoria de referencia del resto del período.
+El gemelo sólo se extiende hasta la meteorología disponible, como máximo siete
+días después del corte. El fondo histórico no crea meteorología ni pronósticos.
+
+Los dos flujos se representan en **% del total por día o por semana**. Un 2 %
+equivale a dos puntos porcentuales del acumulado. El histórico usa los totales
+de sus ventanas registradas; el gemelo usa su total estacional estimado. El
+flujo histórico se deriva de diferencias del acumulado mediano, no de conteos
+diarios. La interpolación y la combinación de campañas suavizan sus picos.
+Las semanas son de lunes a domingo, sin renormalizar; las barras parciales
+aparecen rayadas y especifican sus días disponibles. El acumulado no cambia
+al alternar la frecuencia. Los períodos sin referencia se mantienen desconocidos.
+
+### Intensidad de emergencia a siete días
+
+`Índice = flujo del gemelo de mañana a siete días después / máximo semanal del pool`.
+
+El numerador suma siete flujos diarios futuros. El denominador utiliza el mismo
+pool que los gráficos, trasladado al calendario consultado, y sólo semanas
+completas de lunes a domingo dentro del eje enero–1 de octubre. No es el máximo
+diario ni el máximo individual de una campaña. Ambas magnitudes se calculan
+en la misma escala fraccional y se muestran como porcentajes.
+
+| Intensidad | Condición |
+| --- | --- |
+| 🔴 Alta | Más del 75 % del máximo semanal histórico |
+| 🟠 Media | Del 25 al 75 %, inclusive |
+| 🟡 Baja | Flujo positivo y menor al 25 % del máximo |
+| 🟢 Nula | Flujo semanal exactamente igual a cero |
+
+Se requieren siete fechas futuras válidas: un horizonte incompleto se indica
+en gris, sin clasificarlo como Bajo o Nulo. Con flujo positivo pero sin un
+máximo histórico válido se muestra «Sin referencia». El intervalo futuro
+móvil puede abarcar partes de dos semanas calendario. El selector del gráfico
+no cambia este cálculo. Es intensidad relativa, no probabilidad de emergencia.
+
+### Semáforo del tiempo térmico desde el primer pico
+
+| Indicador | TT acumulado |
+| --- | --- |
+| 🔴 FUERA DE CONTROL | >800 °Cd |
+| 🟠 ULTIMO PLAZO | >700 y ≤800 °Cd |
+| 🟡 CONTROL A TIEMPO | ≥600 y ≤700 °Cd |
+| 🟢 AUN NO CONTROLAR | <600 °Cd |
+
+La categoría se determina con el valor sin redondear en la fecha del estado.
+Se conservan los parámetros fisiológicos, pesos y meteorología de Lartigau;
+se mantiene el techo y decaimiento propio desde el 15/04.
+
 
 ## Meteorología 2026
 
@@ -144,7 +224,7 @@ muestreo medido.
 | Evaluación | RMSE base | RMSE calibrado |
 |---|---:|---:|
 | Ajuste retrospectivo, 14 intervalos | 306,76 | 269,05 |
-| Evaluación temporal, 8 intervalos posteriores | 199,43 | 384,81 |
+| Evaluación temporal, 8 intervalos posteriores | 199,43 | 447,54 |
 
 Los RMSE se expresan en plantas/m² por intervalo. El ajuste retrospectivo
 reduce el error en 12,3 %, pero la evaluación temporal **empeora**: mejora 3 de
@@ -156,10 +236,21 @@ Falta validar el pico principal y la transferencia entre campañas.
 La calibración sólo se aplica al seleccionar Lartigau, desde el 30/08/2026 y
 con el mismo motor y referencia del ajuste. Si se asimilan conteos de 2026,
 utiliza la base para evitar reutilizar esa evidencia en calibración y asimilación.
-El motivo de aplicación aparece junto al interruptor. El ajuste no reduce
-automáticamente la incertidumbre.
+El motivo de aplicación aparece junto al interruptor. Desactivarlo conserva el
+pool histórico: normalización estacional y calibración son capas distintas.
+El ajuste no reduce automáticamente la incertidumbre.
 
-Los conteos adjuntos se incluyen como referencia de calibración. Para asimilarlos
+El perfil y sus diagnósticos se regeneraron el 22/09/2026 con la nueva selección.
+El ajuste final usa nueve referencias; cada evaluación anterior al 30/08 utiliza
+sólo las ocho series previas, sin el total 2026 conocido después. La huella del
+perfil incluye ahora el CSV 2026. Se conservan los conteos, la meteorología
+fija, las fechas de corte y los parámetros del modelo.
+
+El pool y los gráficos admiten consultas de 2027. La operación con meteorología
+2027 requiere habilitar esa campaña y cargar su serie; el actualizador mantiene
+el cierre configurado del 01/10/2026.
+
+Los conteos adjuntos integran el pool histórico y la calibración. Para asimilarlos
 en un lote, descargue el CSV desde **Calibración por sitio** y cárguelo en
 **Observaciones**. No se incorporan automáticamente a la base SQLite.
 
@@ -182,5 +273,7 @@ python -m compileall -q app.py predweem_twin scripts update_meteo.py
 
 Las pruebas incluyen equivalencia con el motor original, decaimiento desde
 15/04, serie parcial, integridad del adjunto, reproducción del perfil, prevención
-de doble uso de conteos, asimilación, cobertura, almacenamiento, procedencia
+de doble uso de conteos, composición y peso del pool, disponibilidad temporal,
+conservación del flujo semanal, límites de los semáforos, asimilación, cobertura,
+almacenamiento, procedencia
 meteorológica y cierre de campaña. Se ejecutan en GitHub Actions.

@@ -14,7 +14,7 @@ from .core import (
     run_predweem,
 )
 from .observations import prepare_observations, read_observation_file
-from .seasonal import load_seasonal_reference
+from .seasonal import load_local_seasonal_reference, load_seasonal_reference
 from .state import build_twin_snapshot
 
 __all__ = [
@@ -27,6 +27,7 @@ __all__ = [
     "has_coverage_columns",
     "has_coverage_data",
     "load_seasonal_reference",
+    "load_local_seasonal_reference",
     "prepare_coverage_series",
     "prepare_observations",
     "read_observation_file",

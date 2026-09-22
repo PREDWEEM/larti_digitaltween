@@ -46,5 +46,5 @@ def test_reference_is_shared_and_excludes_2010_and_2015():
         excluded_years=("2010", "2015"),
     )
 
-    assert reference["N_Campanas"].eq(9).all()
-    assert not reference["Campanas"].str.contains("2010|2015|balcarce|san pedro|lartigau", case=False).any()
+    assert reference["N_Campanas"].eq(8).all()
+    assert not reference["Campanas"].str.contains("2010|2015|balcarce|san pedro|tresas|lartigau", case=False).any()

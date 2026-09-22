@@ -13,7 +13,7 @@ from predweem_twin.calibration import (
 )
 from predweem_twin.core import ModelParameters, PracticalANNModel, run_predweem
 from predweem_twin.observations import prepare_observations
-from predweem_twin.seasonal import load_seasonal_reference
+from predweem_twin.seasonal import load_local_seasonal_reference
 
 
 ROOT = Path(__file__).parents[1]
@@ -135,9 +135,7 @@ def test_known_transformation_can_be_learned_without_seasonal_total():
 def real_data():
     weather = pd.read_csv(DATA / "lartigau_2026_weather.csv")
     model = PracticalANNModel.from_directory(ROOT / "models")
-    reference = load_seasonal_reference(
-        ROOT / "models/modelo_clusters_k3.pkl", excluded_years=("2010", "2015"),
-    )
+    reference = load_local_seasonal_reference(ROOT, as_of="2026-08-30")
     trajectory = run_predweem(
         weather, model, ModelParameters(),
         normalization_as_of="2026-08-30", seasonal_reference=reference,
@@ -179,7 +177,8 @@ def test_calibration_keeps_lartigau_decay_and_shared_reference(real_data):
     assert saved["model_parameters"]["w_max"] == 18.816
     assert saved["model_parameters"]["decay_tau_days"] == 60.
     assert saved["model_parameters"]["decay_cap_fraction"] == .5
-    assert saved["seasonal_reference"]["include_patterns"] == []
+    assert "lartigau_2026_counts.csv" in saved["seasonal_reference"]["campaigns"]
+    assert "tresas" not in saved["seasonal_reference"]["campaigns"].lower()
     assert saved["seasonal_reference"]["excluded_years"] == ["2010", "2015"]
     assert saved["seasonal_reference"]["excluded_sites"] == ["balcarce", "san pedro"]
     assert "balcarce" not in saved["seasonal_reference"]["campaigns"].lower()
