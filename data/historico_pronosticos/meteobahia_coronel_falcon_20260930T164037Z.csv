@@ -1,0 +1,3 @@
+Fecha,TMAX,TMIN,Prec,TMEDIA,GD_Tb2,Fuente,TipoDato,CalidadDato,Latitud_grilla,Longitud_grilla,Elevacion_grilla_m,Emision_UTC
+2026-09-30,15.000,3.000,0.000,9.000,7.000,METEOBAHIA_XML_CORONEL_FALCON,Pronostico,Pronostico_deterministico_Coronel_Falcon,,,,2026-09-30T16:40:37+00:00
+2026-10-01,13.000,3.000,0.300,8.000,6.000,METEOBAHIA_XML_CORONEL_FALCON,Pronostico,Pronostico_deterministico_Coronel_Falcon,,,,2026-09-30T16:40:37+00:00
