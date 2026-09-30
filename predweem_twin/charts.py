@@ -2,29 +2,41 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
-from .flows import annual_historical_reference, weekly_flow_groups
-from .state import thermal_window_dates
+from .flows import annual_historical_reference, historical_weekly_max, weekly_flow_groups
+from .state import intensity_category, thermal_window_dates
 
 
-def _weekly_flow_trace(trace, cutoff, year_start, display_end, historical=False):
+INTENSITY_COLORS = {
+    "Alta": "#dc2626", "Media": "#f97316",
+    "Baja": "#eab308", "Nula": "#16a34a",
+    "Semana parcial": "#94a3b8", "Sin referencia": "#94a3b8",
+}
+
+
+def _weekly_flow_trace(trace, cutoff, year_start, display_end, historical=False, historical_peak=None):
     """Suma porcentajes diarios en semanas comunes de lunes a domingo.
 
     No renormaliza, completa datos ausentes ni extrapola semanas parciales.
     Las barras comparten semanas, sin extenderse más allá de las fechas con
     datos. El rayado identifica semanas con menos de siete días.
     """
-    dates, totals, widths, offsets, details, patterns = [], [], [], [], [], []
+    dates, totals, widths, offsets, details, patterns, colors = [], [], [], [], [], [], []
     for monday, group in weekly_flow_groups(trace.x, trace.y):
         sunday = monday + pd.Timedelta(days=6)
         start = max(monday, year_start)
         end = min(sunday, display_end)
-        valid = group.loc[group["Flujo"].notna()]
+        valid = group.loc[
+            np.isfinite(group["Flujo"]) & group["Flujo"].ge(0)
+            & ~group["Fecha"].duplicated(keep=False)
+        ]
         count = valid["Fecha"].nunique()
+        total = valid["Flujo"].sum(min_count=1)
         dates.append(start)
-        totals.append(group["Flujo"].sum(min_count=1))
+        totals.append(total)
         first_day = max(start, valid["Fecha"].min()) if count else start
         last_day = min(end, valid["Fecha"].max()) if count else end
         widths.append(max(1, (last_day - first_day).days + 1) * 86400000 * .9)
@@ -42,16 +54,41 @@ def _weekly_flow_trace(trace, cutoff, year_start, display_end, historical=False)
             source = "Total estacional estimado"
             if future_days:
                 source += f" · incluye {future_days} día(s) de proyección"
-        details.append([f"{monday:%d/%m}–{sunday:%d/%m}", coverage, available, source])
+        ratio = None
+        if count < 7:
+            category = "Semana parcial"
+        elif total == 0:
+            category = "Nula"
+            ratio = 0.0 if historical_peak is not None else None
+        elif historical_peak is None:
+            category = "Sin referencia"
+        else:
+            # Las barras usan porcentaje; el máximo compartido usa fracción.
+            ratio = total / (historical_peak * 100)
+            category = intensity_category(ratio)
+        colors.append(INTENSITY_COLORS[category])
+        ratio_label = (
+            f"{ratio:.1%} del máximo semanal histórico" if ratio is not None
+            else "Sin comparación con el máximo histórico"
+        )
+        category_label = (
+            f"Intensidad: {category}" if category in {"Alta", "Media", "Baja", "Nula"}
+            else f"Sin clasificación: {category.lower()}"
+        )
+        details.append([
+            f"{monday:%d/%m}–{sunday:%d/%m}", coverage, available, source,
+            category_label, ratio_label,
+        ])
     return go.Bar(
         x=dates, y=totals, width=widths, offset=offsets,
         name=trace.name if historical else "Flujo semanal del gemelo",
-        marker=dict(color=trace.marker.color, pattern_shape=patterns),
-        opacity=trace.opacity,
+        marker=dict(color=colors, pattern_shape=patterns),
+        opacity=.22 if historical else .9,
         customdata=details,
         hovertemplate=(
             "Semana %{customdata[0]}<br>Flujo: %{y:.2f} % del total<br>"
-            "%{customdata[1]}<br>%{customdata[2]}<br>%{customdata[3]}<extra>%{fullData.name}</extra>"
+            "%{customdata[1]}<br>%{customdata[2]}<br>%{customdata[3]}<br>"
+            "%{customdata[4]}<br>%{customdata[5]}<extra>%{fullData.name}</extra>"
         ),
     )
 
@@ -65,6 +102,7 @@ def trajectory_charts(
     upper_thermal_time=800.0,
     seasonal_reference=None,
     flow_frequency="Diario",
+    onset_notice=None,
 ):
     if flow_frequency not in ("Diario", "Semanal"):
         raise ValueError("La frecuencia del flujo debe ser Diario o Semanal.")
@@ -126,13 +164,35 @@ def trajectory_charts(
         ),
     )
     if flow_frequency == "Semanal":
+        peak = historical_weekly_max(seasonal_reference, cutoff)
         daily_figure = go.Figure([
             _weekly_flow_trace(
                 trace, cutoff, year_start, display_end,
                 historical=trace.name == "Flujo histórico · orientativo",
+                historical_peak=peak,
             )
             for trace in daily_figure.data
         ])
+        # Un flujo cero no tiene altura: mostrar una marca verde en y=0,
+        # sin inventar una barra positiva ni marcar semanas incompletas.
+        twin_weekly = daily_figure.data[-1]
+        null_weeks = [
+            i for i, detail in enumerate(twin_weekly.customdata)
+            if detail[4] == "Intensidad: Nula"
+        ]
+        if null_weeks:
+            daily_figure.add_trace(go.Scatter(
+                x=[pd.Timestamp(twin_weekly.x[i]) + pd.Timedelta(
+                    milliseconds=twin_weekly.offset[i] + twin_weekly.width[i] / 2
+                ) for i in null_weeks],
+                y=[0.] * len(null_weeks), mode="markers",
+                name="Intensidad nula del gemelo", showlegend=False,
+                marker=dict(color=INTENSITY_COLORS["Nula"], size=11, symbol="line-ew",
+                            line=dict(color=INTENSITY_COLORS["Nula"], width=3)),
+                cliponaxis=False,
+                customdata=[twin_weekly.customdata[i] for i in null_weeks],
+                hovertemplate=twin_weekly.hovertemplate,
+            ))
     cumulative_figure.add_trace(
         go.Scatter(
             x=df["Fecha"],
@@ -276,5 +336,33 @@ def trajectory_charts(
         title_text=f"Flujo {flow_frequency.lower()} (% del total)",
         ticksuffix=" %", rangemode="tozero",
     )
+    if onset_notice and onset_notice.get("enabled") and onset_notice.get("monitoring_alert_date"):
+        monitoring_date = pd.Timestamp(onset_notice["monitoring_alert_date"])
+        if (
+            onset_notice.get("status") in {"watch", "started", "observed"}
+            and year_start <= monitoring_date <= min(cutoff, display_end)
+        ):
+            # X es el día exacto, no el lunes ni el centro de su barra semanal.
+            # La punta queda sobre el calendario y la flecha es vertical.
+            daily_figure.add_annotation(
+                name="initial_monitoring_alert",
+                x=monitoring_date.timestamp() * 1000, xref="x",
+                y=0, yref="paper", ax=0, ay=-245,
+                axref="pixel", ayref="pixel", showarrow=True,
+                arrowhead=2, arrowsize=1.3, arrowwidth=2.5,
+                arrowcolor="#6d28d9", standoff=0,
+                text=("<b>Alerta inicial de monitoreo</b><br>"
+                      f"{monitoring_date:%d/%m/%Y} · estimada"),
+                font=dict(color="#5b21b6", size=11),
+                bgcolor="rgba(255,255,255,.96)",
+                bordercolor="#6d28d9", borderwidth=1, borderpad=5,
+                xanchor=("left" if monitoring_date < year_start + pd.Timedelta(days=20)
+                         else "right" if monitoring_date > display_end - pd.Timedelta(days=30)
+                         else "center"),
+                hovertext=("Inicio modelado menos siete días. La fecha se recalcula con "
+                           "la información disponible y no acredita una alerta emitida ese día. "
+                           "El reloj térmico conserva su origen en el primer pico modelado."),
+                captureevents=True,
+            )
     cumulative_figure.update_yaxes(title_text="Emergencia acumulada (%)", range=[0, 105])
     return daily_figure, cumulative_figure

@@ -51,7 +51,8 @@ def thermal_control_stage(thermal_time: float) -> str:
     return "FUERA DE CONTROL"
 
 
-def _intensity(ratio: float) -> str:
+def intensity_category(ratio: float) -> str:
+    """Categoría compartida por el indicador y las barras semanales."""
     if ratio == 0:
         return "Nula"
     # Tolera únicamente el redondeo numérico en los límites inclusivos.
@@ -108,7 +109,7 @@ def weekly_flow_intensity(trajectory, as_of, seasonal_reference=None) -> dict:
         return result
     ratio = total / peak
     result.update(
-        intensity_7d=_intensity(ratio),
+        intensity_7d=intensity_category(ratio),
         intensity_7d_ratio=ratio,
         intensity_7d_reason="Flujo previsto en siete días / máximo de semanas completas del pool histórico.",
     )
