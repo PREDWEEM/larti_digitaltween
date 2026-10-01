@@ -92,10 +92,17 @@ def _base_frame(trajectory: pd.DataFrame) -> pd.DataFrame:
     df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce").dt.tz_localize(None)
     df["EMERAC_TWIN"] = pd.to_numeric(
         df["EMERAC_NORMALIZADA"], errors="coerce"
-    ).fillna(0.0)
-    df["EMERREL_TWIN"] = (
-        df["EMERAC_TWIN"].diff().fillna(df["EMERAC_TWIN"]).clip(lower=0.0)
     )
+    available = bool(np.isfinite(df["EMERAC_TWIN"]).all())
+    if "Normalizacion_Disponible" in df:
+        available = available and bool(df["Normalizacion_Disponible"].all())
+    df["Normalizacion_Disponible"] = available
+    if not available:
+        df["EMERAC_TWIN"] = np.nan
+    daily = df["EMERAC_TWIN"].diff()
+    if not df.empty:
+        daily.iloc[0] = df["EMERAC_TWIN"].iloc[0]
+    df["EMERREL_TWIN"] = daily.clip(lower=0.0)
     df["POTENCIAL_ESTACIONAL_PLM2"] = np.nan
     df["EMERAC_TWIN_PLM2"] = np.nan
     df["EMERREL_TWIN_PLM2"] = np.nan
@@ -421,6 +428,9 @@ def assimilate_observations(
     anterior para conservar compatibilidad.
     """
     df = _base_frame(trajectory)
+    if not df["Normalizacion_Disponible"].all():
+        df["MODO_ASIMILACION"] = "pendiente: porcentaje aún no estimable"
+        return df, pd.DataFrame()
     if observations is None or observations.empty:
         return df, pd.DataFrame()
 

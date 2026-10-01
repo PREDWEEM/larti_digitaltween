@@ -114,6 +114,9 @@ def _first_column(mapping: dict[str, str], aliases: set[str]):
 
 
 def _model_cumulative_at(trajectory: pd.DataFrame, dates: pd.Series) -> np.ndarray:
+    if ("Normalizacion_Disponible" in trajectory
+            and not trajectory["Normalizacion_Disponible"].all()):
+        return np.full(len(dates), np.nan)
     model = trajectory[["Fecha", "EMERAC_NORMALIZADA"]].copy()
     model["Fecha"] = pd.to_datetime(model["Fecha"], errors="coerce").dt.tz_localize(None)
     query = pd.DataFrame({"Fecha": pd.to_datetime(dates).dt.tz_localize(None)})
@@ -297,14 +300,20 @@ def prepare_observations(
         if observed_total <= 0:
             raise ValueError("La suma de PLM2 debe ser mayor que cero.")
 
-        potential_info = estimate_flow_potential(
-            model_intervals,
-            observed_flows,
-            float(model_cumulative[-1]),
-            seasonal_potential_prior=seasonal_potential_prior,
-        )
-        seasonal_total = potential_info["potential"]
-        method = "potencial dinámico estimado desde los flujos por intervalo"
+        normalization_available = bool(np.isfinite(model_cumulative).all())
+        if normalization_available:
+            potential_info = estimate_flow_potential(
+                model_intervals,
+                observed_flows,
+                float(model_cumulative[-1]),
+                seasonal_potential_prior=seasonal_potential_prior,
+            )
+            seasonal_total = potential_info["potential"]
+            method = "potencial dinámico estimado desde los flujos por intervalo"
+        else:
+            potential_info = {"fit_quality": None, "potential_cv": None}
+            seasonal_total = np.nan
+            method = "conteos conservados; porcentaje aún no estimable"
 
         prepared["Flujo_observado_PLM2"] = prepared["Valor_original"]
         prepared["Acumulado_PLM2"] = prepared["Valor_original"].cumsum()
@@ -315,9 +324,10 @@ def prepare_observations(
         metadata.update(
             {
                 "total_observado_plm2": observed_total,
-                "potencial_estacional_plm2": seasonal_total,
+                "potencial_estacional_plm2": seasonal_total if normalization_available else None,
+                "normalizacion_disponible": normalization_available,
                 "metodo_normalizacion": method,
-                "progreso_modelo_ultima_fecha": float(model_cumulative[-1]),
+                "progreso_modelo_ultima_fecha": float(model_cumulative[-1]) if normalization_available else None,
                 "calidad_ajuste_flujos": potential_info["fit_quality"],
                 "cv_potencial_estimado": potential_info["potential_cv"],
             }
@@ -325,6 +335,7 @@ def prepare_observations(
         if repetition_output_columns:
             estimated_uncertainty = (
                 prepared["EE_repeticiones_PLM2"].to_numpy(float) / seasonal_total
+                if normalization_available else np.zeros(len(prepared))
             )
             prepared["Incertidumbre"] = np.clip(
                 np.maximum(
@@ -343,6 +354,11 @@ def prepare_observations(
                     "incertidumbre_maxima": float(prepared["Incertidumbre"].max()),
                 }
             )
+            if not normalization_available:
+                metadata["metodo_incertidumbre"] = (
+                    "mínimo provisional; error estándar conservado en plantas/m² "
+                    "para asimilar cuando haya normalización"
+                )
         else:
             prepared["Incertidumbre"] = float(uncertainty)
             metadata["metodo_incertidumbre"] = "valor fijo indicado por el usuario"

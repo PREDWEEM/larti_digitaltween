@@ -366,9 +366,8 @@ def run_predweem(
         seasonal_total, normalization_metadata = partial_season_normalization(
             df, normalization_as_of, seasonal_reference
         )
-        if seasonal_total is not None:
-            total = seasonal_total
-            normalization_mode = normalization_metadata["mode"]
+        total = seasonal_total if seasonal_total is not None else np.nan
+        normalization_mode = normalization_metadata["mode"]
         p10, median, p90 = reference_progress(
             seasonal_reference, df["Julian_days"].to_numpy(float)
         )
@@ -379,9 +378,19 @@ def run_predweem(
         df["Progreso_Estacional_P10"] = np.nan
         df["Progreso_Estacional_Referencia"] = np.nan
         df["Progreso_Estacional_P90"] = np.nan
-    df["EMERAC_NORMALIZADA"] = df["EMERAC"] / total if total > 0 else 0.0
+        if normalization_as_of is not None:
+            total = np.nan
+            normalization_mode = "porcentaje aún no estimable"
+            normalization_metadata["reason"] = "Falta una referencia estacional para este corte."
+    available = bool(np.isfinite(total))
+    df["EMERAC_NORMALIZADA"] = (
+        df["EMERAC"] / total if available and total > 0
+        else 0.0 if available else np.nan
+    )
     df["EMERAC_NORMALIZADA"] = df["EMERAC_NORMALIZADA"].clip(0.0, 1.0)
     df["Normalizacion_Modo"] = normalization_mode
+    df["Normalizacion_Disponible"] = available
+    df["Normalizacion_Motivo"] = normalization_metadata.get("reason", "")
     df["Total_EMERREL_Referencia"] = total
     df["Fecha_Ancla_Normalizacion"] = normalization_metadata.get(
         "anchor_date", pd.NaT

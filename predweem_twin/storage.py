@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from pathlib import Path
 
@@ -14,7 +15,7 @@ CREATE TABLE IF NOT EXISTS observations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     site_id TEXT NOT NULL,
     observed_at TEXT NOT NULL,
-    cumulative REAL NOT NULL CHECK(cumulative BETWEEN 0 AND 1),
+    cumulative REAL CHECK(cumulative BETWEEN 0 AND 1),
     uncertainty REAL NOT NULL CHECK(uncertainty > 0),
     note TEXT NOT NULL DEFAULT '',
     raw_value REAL,
@@ -71,6 +72,48 @@ class TwinStore:
             for column, statement in migrations.items():
                 if column not in existing:
                     connection.execute(statement)
+            self._allow_pending_normalization(connection)
+
+    @staticmethod
+    def _allow_pending_normalization(connection):
+        """Permite NULL para conteos sin porcentaje, preservando datos existentes.
+
+        SQLite requiere reconstruir la tabla para quitar NOT NULL. Se conserva
+        su esquema, IDs, columnas, índices y disparadores en una transacción.
+        """
+        columns = list(connection.execute("PRAGMA table_info(observations)"))
+        if not any(row[1] == "cumulative" and row[3] for row in columns):
+            return
+        sql = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='observations'"
+        ).fetchone()[0]
+        body = sql[sql.index("("):]
+        body, changed = re.subn(r"\bcumulative\s+REAL\s+NOT\s+NULL\b", "cumulative REAL", body, flags=re.I)
+        if changed != 1:
+            raise ValueError("No se pudo migrar el porcentaje sin modificar su esquema.")
+        related = [row[0] for row in connection.execute(
+            "SELECT sql FROM sqlite_master WHERE tbl_name='observations' "
+            "AND type IN ('index','trigger') AND sql IS NOT NULL"
+        )]
+        names = ", ".join('"' + row[1].replace('"', '""') + '"' for row in columns)
+        if not connection.in_transaction:
+            connection.execute("BEGIN")
+        sequence = connection.execute(
+            "SELECT seq FROM sqlite_sequence WHERE name='observations'"
+        ).fetchone()
+        connection.execute("CREATE TABLE observations_nullable " + body)
+        connection.execute(
+            f"INSERT INTO observations_nullable ({names}) SELECT {names} FROM observations"
+        )
+        connection.execute("DROP TABLE observations")
+        connection.execute("ALTER TABLE observations_nullable RENAME TO observations")
+        if sequence is not None:
+            connection.execute(
+                "UPDATE sqlite_sequence SET seq=MAX(seq, ?) WHERE name='observations'",
+                (sequence[0],),
+            )
+        for statement in related:
+            connection.execute(statement)
 
     def connect(self):
         return sqlite3.connect(self.path)
@@ -136,11 +179,14 @@ class TwinStore:
             flow_value = row.get("Flujo_observado_PLM2")
             cumulative_value = row.get("Acumulado_PLM2")
             is_flow = pd.notna(flow_value)
+            observed = row["Observado"]
+            if pd.isna(observed) and not is_flow:
+                raise ValueError("Un acumulado ingresado manualmente requiere un porcentaje válido.")
             rows.append(
                 (
                     site_id,
                     pd.Timestamp(row["Fecha"]).date().isoformat(),
-                    float(row["Observado"]),
+                    float(observed) if pd.notna(observed) else None,
                     float(row["Incertidumbre"]),
                     str(row.get("Nota", "")),
                     float(row["Valor_original"]),

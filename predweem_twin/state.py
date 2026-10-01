@@ -14,8 +14,9 @@ from .flows import historical_weekly_max
 class TwinSnapshot:
     site_id: str
     as_of: str
-    emergence: float
-    remaining: float
+    emergence: float | None
+    remaining: float | None
+    normalization_available: bool
     intensity_7d: str
     increment_7d: float | None
     historical_weekly_max: float | None
@@ -90,6 +91,16 @@ def weekly_flow_intensity(trajectory, as_of, seasonal_reference=None) -> dict:
         "forecast_days_7d": available,
         "intensity_7d_reason": f"Flujo previsto disponible para {available}/7 días; no se asigna nivel de intensidad.",
     }
+    if ("Normalizacion_Disponible" in trajectory
+            and not trajectory["Normalizacion_Disponible"].all()):
+        result.update(
+            intensity_7d="Aún no estimable",
+            intensity_7d_reason=(
+                "Sin normalización estacional suficiente hasta el corte. "
+                "El flujo porcentual no es estimable; no significa intensidad Nula."
+            ),
+        )
+        return result
     if available < 7:
         return result
     total = float(future.sum())
@@ -142,7 +153,11 @@ def build_twin_snapshot(
     df = trajectory.sort_values("Fecha").reset_index(drop=True)
     candidates = df.index[df["Fecha"] <= as_of].tolist()
     idx = candidates[-1] if candidates else 0
-    current = float(df.at[idx, "EMERAC_TWIN"])
+    current_value = float(df.at[idx, "EMERAC_TWIN"])
+    normalization_available = bool(np.isfinite(current_value))
+    if "Normalizacion_Disponible" in df:
+        normalization_available = normalization_available and bool(df.at[idx, "Normalizacion_Disponible"])
+    current = current_value if normalization_available else None
     intensity = weekly_flow_intensity(df, as_of, seasonal_reference)
     start, end = _next_cohort(df, idx)
     potential_value = (
@@ -172,7 +187,8 @@ def build_twin_snapshot(
         site_id=site_id,
         as_of=df.at[idx, "Fecha"].date().isoformat(),
         emergence=current,
-        remaining=max(0.0, 1.0 - current),
+        remaining=max(0.0, 1.0 - current) if current is not None else None,
+        normalization_available=normalization_available,
         **intensity,
         soil_water=float(df.at[idx, "W_superficial"]),
         soil_water_fraction=float(df.at[idx, "Humedad_Relativa"]),

@@ -125,6 +125,10 @@ def trajectory_charts(
         audit = audit.loc[audit_dates.between(year_start, cutoff)].copy()
     daily_figure = go.Figure()
     cumulative_figure = go.Figure()
+    normalization_available = (
+        bool(df["Normalizacion_Disponible"].all())
+        if "Normalizacion_Disponible" in df else True
+    )
     historical = None
     if seasonal_reference is not None:
         historical = annual_historical_reference(seasonal_reference, cutoff)
@@ -238,7 +242,7 @@ def trajectory_charts(
                 marker=dict(color="#df5b3f", size=11, line=dict(color="white", width=2)),
             ),
         )
-    elif observations is not None and not observations.empty:
+    elif normalization_available and observations is not None and not observations.empty:
         cumulative_figure.add_trace(
             go.Scatter(
                 x=observations["Fecha"],
@@ -365,4 +369,12 @@ def trajectory_charts(
                 captureevents=True,
             )
     cumulative_figure.update_yaxes(title_text="Emergencia acumulada (%)", range=[0, 105])
+    if not normalization_available:
+        for figure in (daily_figure, cumulative_figure):
+            figure.add_annotation(
+                name="normalization_unavailable", x=.5, y=1.03,
+                xref="paper", yref="paper", showarrow=False,
+                text="Gemelo: porcentaje aún no estimable · histórico orientativo",
+                font=dict(size=11, color="#475569"), bgcolor="rgba(255,255,255,.95)",
+            )
     return daily_figure, cumulative_figure

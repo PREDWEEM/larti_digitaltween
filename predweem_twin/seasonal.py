@@ -173,35 +173,37 @@ def partial_season_normalization(
     """Estima el total de señal estacional sin usar el fin del pronóstico.
 
     La señal acumulada de PREDWEEM se ancla, en la fecha del estado, al progreso
-    mediano de campañas históricas. Si aún no existe señal positiva, utiliza el
-    último día disponible como ancla provisional.
+    mediano de campañas históricas, utilizando sólo fechas hasta el corte.
+    Sin señal o progreso histórico suficiente, el porcentaje no es estimable.
     """
     cutoff = pd.Timestamp(as_of).tz_localize(None).normalize()
-    candidates = trajectory.index[trajectory["Fecha"] <= cutoff].tolist()
-    anchor_idx = candidates[-1] if candidates else 0
+    if pd.isna(cutoff):
+        raise ValueError("Fecha de corte de normalización inválida.")
+    dates = pd.to_datetime(trajectory["Fecha"]).dt.tz_localize(None).dt.normalize()
+    past = trajectory.loc[dates <= cutoff].sort_values("Fecha")
+    if past.empty:
+        return None, {"mode": "porcentaje aún no estimable", "reason": "Sin historia hasta el corte."}
+    anchor = past.iloc[-1]
     p10, median, p90 = reference_progress(
-        reference, trajectory["Julian_days"].to_numpy(float)
+        reference, [float(anchor["Julian_days"])]
     )
-    raw_cumulative = trajectory["EMERAC"].to_numpy(float)
+    raw_cumulative = float(anchor["EMERAC"])
+    metadata = {
+        "mode": "porcentaje aún no estimable",
+        "anchor_date": anchor["Fecha"],
+        "reference_progress": float(median[0]),
+    }
+    if (not np.isfinite([raw_cumulative, median[0]]).all()
+            or raw_cumulative <= 1e-12 or median[0] <= 0.01):
+        return None, {**metadata, "reason": "Sin señal acumulada o progreso histórico mayor al 1% hasta el corte."}
 
-    if raw_cumulative[anchor_idx] <= 1e-12 or median[anchor_idx] <= 0.01:
-        valid = np.flatnonzero((raw_cumulative > 1e-12) & (median > 0.01))
-        if not len(valid):
-            return None, {
-                "mode": "sin señal suficiente",
-                "anchor_date": trajectory.at[anchor_idx, "Fecha"],
-                "reference_progress": float(median[anchor_idx]),
-            }
-        anchor_idx = int(valid[0])
-
-    seasonal_total = float(raw_cumulative[anchor_idx] / median[anchor_idx])
+    seasonal_total = float(raw_cumulative / median[0])
     if not np.isfinite(seasonal_total) or seasonal_total <= 1e-12:
-        return None, {"mode": "sin señal suficiente"}
+        return None, {**metadata, "reason": "Denominador estacional no válido."}
     return seasonal_total, {
+        **metadata,
         "mode": "referencia estacional histórica",
-        "anchor_date": trajectory.at[anchor_idx, "Fecha"],
-        "reference_progress": float(median[anchor_idx]),
-        "reference_p10": float(p10[anchor_idx]),
-        "reference_p90": float(p90[anchor_idx]),
+        "reference_p10": float(p10[0]),
+        "reference_p90": float(p90[0]),
         "seasonal_signal_total": seasonal_total,
     }

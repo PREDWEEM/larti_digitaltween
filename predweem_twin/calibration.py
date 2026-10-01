@@ -222,6 +222,19 @@ def apply_site_calibration(
     el modelo original: esos datos no se reutilizan como calibración y evidencia
     nueva a la vez. En una campaña posterior sí se combinan memoria y conteos.
     """
+    unavailable = (
+        "Normalizacion_Disponible" in trajectory
+        and not trajectory["Normalizacion_Disponible"].all()
+    )
+    if unavailable:
+        frame = trajectory.copy()
+        for column in ("EMERAC_NORMALIZADA", "EMERAC_BASE_SIN_CALIBRAR", "EMERAC_CALIBRADA", "EMERREL_CALIBRADA"):
+            frame[column] = np.nan
+        reason = "Calibración pendiente: porcentaje aún no estimable."
+        frame["Calibracion_Perfil"] = ""
+        frame["Calibracion_Aplicada"] = False
+        frame["Calibracion_Motivo"] = reason
+        return frame, {"applied": False, "profile_id": None, "reason": reason}
     frame = _validated_trajectory(trajectory)
     original = frame["EMERAC_NORMALIZADA"].to_numpy(float)
     frame["EMERAC_BASE_SIN_CALIBRAR"] = original
