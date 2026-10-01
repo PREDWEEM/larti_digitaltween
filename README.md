@@ -320,6 +320,12 @@ meteorológica y cierre de campaña. Se ejecutan en GitHub Actions.
 
 ## Disponibilidad operativa de porcentajes (01/10/2026)
 
+Durante una actualización de Streamlit, la app recarga los módulos locales en
+orden de dependencia si cambia el código del paquete. Así evita mezclar una
+interfaz nueva con un constructor de estado antiguo sin
+`normalization_available`. La misma revisión identifica el modelo en caché;
+los cambios normales de fecha no vuelven a cargar los módulos ni borran conteos.
+
 **Normalización inicial:** el ancla usa exclusivamente el último estado hasta
 la fecha de corte. Nunca se busca un ancla en los días futuros ni se utiliza el
 total del período parcial como sustituto estacional. Se requiere señal

@@ -3,12 +3,41 @@
 from __future__ import annotations
 
 from datetime import date
+from hashlib import sha256
+import importlib
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+
+# Streamlit puede volver a ejecutar app.py conservando submódulos antiguos en
+# sys.modules. Recargar sólo state dejaría el motor y la asimilación anteriores.
+# La firma invalida esta caché al cambiar cualquier archivo del paquete; en los
+# reruns normales se conservan los mismos módulos y recursos.
+RUNTIME_REVISION = sha256(b"".join(
+    path.name.encode("utf-8") + b"\0" + path.read_bytes() + b"\0"
+    for path in sorted((Path(__file__).parent / "predweem_twin").glob("*.py"))
+)).hexdigest()
+
+
+@st.cache_resource(show_spinner=False)
+def load_runtime(revision):
+    """Activa una versión coherente de los módulos locales, en orden de dependencia."""
+    importlib.invalidate_caches()
+    for name in (
+        "assimilation", "coverage", "seasonal", "core", "calibration",
+        "observations", "flows", "state", "weather", "onset", "charts",
+        "scenarios", "storage",
+    ):
+        importlib.reload(importlib.import_module(f"predweem_twin.{name}"))
+    # Actualizar también los símbolos que reexporta el paquete.
+    importlib.reload(importlib.import_module("predweem_twin"))
+    return revision
+
+
+load_runtime(RUNTIME_REVISION)
 
 from predweem_twin.assimilation import assimilate_observations
 from predweem_twin.charts import annual_historical_reference, trajectory_charts
@@ -70,7 +99,7 @@ st.markdown(
 
 
 @st.cache_resource
-def load_model():
+def load_model(runtime_revision):
     return PracticalANNModel.from_directory(BASE / "models")
 
 
@@ -210,7 +239,7 @@ parameters = ModelParameters(
     latitud=float(latitude),
     longitud=float(longitude),
 )
-model = load_model()
+model = load_model(RUNTIME_REVISION)
 seasonal_reference = load_progress_reference(as_of)
 reference_campaigns = int(seasonal_reference["N_Campanas"].iloc[0])
 reference_years = seasonal_reference["Campanas_Anos"].iloc[0]
