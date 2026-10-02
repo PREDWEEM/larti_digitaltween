@@ -199,8 +199,9 @@ with st.expander("Configuración del gemelo", expanded=True):
         )
     st.markdown("**Perfil fisiológico Lartigau**")
     st.caption(
-        "Latencia JD 25 · desde el 15/04, techo del 50 % del máximo previo "
-        "con decaimiento τ=60 días, β=1 e intensidad 0,75."
+        "Latencia JD 25 · termoinhibición a 26 °C · choque hídrico 60 mm (piso 0,5) · "
+        "desde el 15/04, techo del 10 % del máximo previo (sólo si hubo flujo ≥0,5 "
+        "antes de esa fecha) con decaimiento τ=40 días, β=1 e intensidad 0,75."
     )
     st.caption("La asimilación modifica el estado estimado, no recalibra la ANN.")
 

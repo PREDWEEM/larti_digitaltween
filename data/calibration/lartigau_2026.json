@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "method": "monotone_logit_v1",
-  "profile_id": "lartigau-2026-08-30-v1-92adff035f",
+  "profile_id": "lartigau-2026-08-30-v1-c3a28f4b95",
   "site": "Lartigau",
   "status": "experimental_una_campana",
   "training_year": 2026,
@@ -10,35 +10,35 @@
   "season_complete": false,
   "first_interval_excluded": true,
   "parameters": {
-    "offset": 0.30000000000000004,
-    "slope": 0.725
+    "offset": -0.25,
+    "slope": 0.7
   },
   "fit": {
     "n_observations": 15,
     "n_intervals": 14,
     "observed_window_total_plm2": 3933.5,
-    "rmse_base_plm2": 306.7604081205812,
-    "rmse_calibrated_plm2": 269.0459095696268,
-    "weighted_mse_base": 3.225691880827566,
-    "weighted_mse_calibrated": 2.481287310855232,
+    "rmse_base_plm2": 297.45953677973125,
+    "rmse_calibrated_plm2": 220.25602567661704,
+    "weighted_mse_base": 3.0330534370976463,
+    "weighted_mse_calibrated": 1.6629525763475155,
     "regularization": 0.05,
     "nuisance_scale_base": 3936.4104520016544,
-    "nuisance_scale_calibrated": 3949.1547898834006,
+    "nuisance_scale_calibrated": 3965.992241749416,
     "parameter_at_bound": false
   },
   "observations_start": "2026-02-01",
   "initial_zero_reference": true,
-  "model_fingerprint": "8bc1422cfee31e030c43b0c4c4e051e1c98cf5f3f9b5eadef9b34fa6d98c1243",
+  "model_fingerprint": "225e6df11783d5c2284991241af125c8766eef79e24070feab248df15c903644",
   "model_parameters": {
     "cobertura_pct": 75.0,
     "w_max": 18.816,
-    "umbral_termoinhibicion": 24.0,
-    "umbral_choque_hidrico": 45.0,
+    "umbral_termoinhibicion": 26.0,
+    "umbral_choque_hidrico": 60.0,
     "exponente_kr": 0.0,
     "latitud": -38.6166,
     "longitud": -61.7,
     "latencia_jd": 25,
-    "techo_choque": 1.0,
+    "techo_choque": 0.5,
     "calentamiento_suelo": 0.0,
     "umbral_primer_pico": 0.2,
     "t_base": 2.0,
@@ -47,10 +47,13 @@
     "tt_control": 600.0,
     "tt_limite": 800.0,
     "decay_enabled": true,
-    "decay_tau_days": 60.0,
+    "decay_tau_days": 40.0,
     "decay_beta": 1.0,
     "decay_intensity": 0.75,
-    "decay_cap_fraction": 0.5
+    "decay_cap_fraction": 0.1,
+    "decay_requiere_senal_previa": true,
+    "decay_umbral_senal_previa": 0.5,
+    "decay_min_dias_senal_previa": 1
   },
   "seasonal_reference": {
     "excluded_years": [
@@ -121,8 +124,8 @@
     "independent_season": false,
     "n_intervals": 8,
     "note": "Ajuste con datos hasta cada corte y evaluación del siguiente intervalo. Se utiliza la serie histórica de pronósticos MeteoBahía archivados, sin garantizar la emisión disponible en cada corte. No demuestra transferencia a otra campaña ni precisión operativa a siete días.",
-    "rmse_base_plm2": 199.43032647583703,
-    "rmse_calibrated_plm2": 447.53730958143876,
+    "rmse_base_plm2": 107.9277548210502,
+    "rmse_calibrated_plm2": 174.24711204733316,
     "intervals_improved": 3
   },
   "limitations": [
@@ -130,23 +133,12 @@
     "El registro inicial de cero del 2026-02-01 delimita el primer intervalo; no se infiere ausencia de emergencia en fechas anteriores.",
     "Cobertura de 75 % y Wmax de 18.816 mm son supuestos de la configuración operativa; el archivo no informa manejo ni cobertura.",
     "El archivo FECHA + PLM2 no incluye repeticiones. Se utiliza un piso de ponderación común, no un error de muestreo medido.",
-    "Se conserva el techo del 50 % y decaimiento desde el 15/04 del motor Lartigau. No se incorpora extinción post-pico de otra localidad.",
+    "Se aplican las reglas v2 (termoinhibición 26 °C, choque hídrico 60 mm con piso 0,5 y techo del 10 % con decaimiento desde el 15/04, condicionado a la señal previa) del motor Lartigau. No se incorpora extinción post-pico de otra localidad.",
     "Las ocho series identificadas sólo por año son una referencia compartida; el pool agrega Lartigau 2026 y no constituye una validación local independiente.",
     "La meteorología corresponde a pronósticos MeteoBahía archivados, no a observaciones de estación.",
     "La transformación no crea cohortes en fechas bloqueadas por el motor biofísico.",
     "Un parámetro en su límite indica que persisten diferencias estructurales.",
     "El ajuste no reduce automáticamente la incertidumbre de asimilación.",
     "Los gráficos de la campaña de ajuste son retrospectivos, no predicciones independientes."
-  ],
-  "normalization_revision": {
-    "date": "2026-10-01",
-    "previous_model_fingerprint": "625a63da28283a79bc9d240fde0947577a0d6d7b7c5083eb0ac6d7fe62fdc13a",
-    "verification": "Reproducido el ajuste en la fecha de cierre original; parámetros y errores de ajuste sin cambios. La disponibilidad operativa ya no se sustituye por cero.",
-    "parameters_unchanged": true,
-    "fit_metrics_unchanged": true,
-    "metrics_checked": [
-      "rmse_base_plm2",
-      "rmse_calibrated_plm2"
-    ]
-  }
+  ]
 }
