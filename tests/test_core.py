@@ -34,7 +34,7 @@ def test_extracted_core_matches_original_lartigau(coverage, wmax, kr):
         weather, original_model, coverage, wmax, kr_exponent=kr,
     )
     result = run_predweem(
-        weather, model, ModelParameters(cobertura_pct=coverage, w_max=wmax, exponente_kr=kr),
+        weather, model, ModelParameters.legacy(cobertura_pct=coverage, w_max=wmax, exponente_kr=kr),
     )
     for column in (
         "EMERREL_RAW_ANN", "ET0", "W_superficial", "Hydric_Factor",
@@ -49,7 +49,7 @@ def test_extracted_core_matches_original_lartigau(coverage, wmax, kr):
 
 def test_lartigau_april_decay_preserves_early_flow_and_caps_late_flow():
     frame = pd.DataFrame({"Fecha": pd.date_range("2026-04-01", "2026-08-01"), "EMERREL": .8})
-    result = apply_cohort_decay(frame, 0, ModelParameters())
+    result = apply_cohort_decay(frame, 0, ModelParameters.legacy())
     assert result.loc[result.Fecha.lt("2026-04-15"), "EMERREL"].eq(.8).all()
     assert result.loc[result.Fecha.eq("2026-04-15"), "EMERREL"].iloc[0] == pytest.approx(.4)
     late = result.loc[result.Fecha.ge("2026-04-15")]
@@ -57,6 +57,31 @@ def test_lartigau_april_decay_preserves_early_flow_and_caps_late_flow():
     assert late.EMERREL.gt(.1).all()  # No extinción a 110 días pospico.
     disabled = apply_cohort_decay(frame, 0, ModelParameters(decay_enabled=False))
     assert disabled.EMERREL.equals(frame.EMERREL)
+
+def test_v2_cap_requires_strong_pre_april_signal():
+    """Reglas v2: sin señal previa fuerte (>=0,5 al menos un día) no hay techo."""
+    dates = pd.date_range("2026-04-01", "2026-08-01")
+    strong = pd.DataFrame({"Fecha": dates, "EMERREL": .8})
+    result = apply_cohort_decay(strong, 0, ModelParameters())
+    assert result.Techo_Aplicado_15Abr.loc[result.Fecha.ge("2026-04-15")].all()
+    assert result.loc[result.Fecha.eq("2026-04-15"), "EMERREL"].iloc[0] == pytest.approx(
+        ModelParameters().decay_cap_fraction * .8
+    )
+    weak = pd.DataFrame({"Fecha": dates, "EMERREL": np.where(dates < "2026-04-15", .3, .8)})
+    result = apply_cohort_decay(weak, 0, ModelParameters())
+    assert result.EMERREL.equals(weak.EMERREL)
+    assert not result.Techo_Aplicado_15Abr.any()
+    forced = apply_cohort_decay(weak, 0, ModelParameters(decay_requiere_senal_previa=False))
+    assert forced.loc[forced.Fecha.eq("2026-04-15"), "EMERREL"].iloc[0] < .8
+
+
+def test_legacy_parameters_restore_previous_behavior():
+    legacy = ModelParameters.legacy()
+    assert legacy.umbral_termoinhibicion == 24.0 and legacy.umbral_choque_hidrico == 45.0
+    assert not legacy.decay_requiere_senal_previa
+    assert ModelParameters().umbral_termoinhibicion == 26.0
+    assert ModelParameters().umbral_choque_hidrico == 60.0
+    assert ModelParameters().techo_choque == .5
 
 
 def test_decay_does_not_invent_a_cap_without_pre_april_emergence():

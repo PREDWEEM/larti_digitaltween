@@ -30,8 +30,8 @@ coberturas, Wmax y exponente Kr.
 - Latitud −38,6166 y longitud −61,7000.
 - Cobertura operativa 75 % y Wmax 18,816 mm.
 - Latencia hasta JD 25; primer pico válido mayor que 0,20.
-- Termoinhibición: media móvil de cinco días mayor o igual que 24 °C.
-- Choque hídrico de tres días, 45 mm, hasta JD 110.
+- Termoinhibición: media móvil de cinco días mayor o igual que 24 °C (original; v2: 26 °C).
+- Choque hídrico de tres días, 45 mm, hasta JD 110 (original; v2: 60 mm, piso 0,5).
 - ET0 Hargreaves, balance superficial y Kr predeterminado igual a cero.
 - Desde el 15/04: techo inicial del 50 % del máximo de emergencia previo a esa fecha,
   con factor `(1 − I) + I × exp(−(días/τ)^β)`, τ=60 días, β=1 e I=0,75.
@@ -74,3 +74,35 @@ el fingerprint incluye el código de selección. El perfil registra filtros,
 cantidad y nombres incluidos/excluidos. La interfaz recarga la referencia
 en cada ejecución para evitar datos obsoletos de Streamlit. Se conserva el
 mecanismo de anclaje estacional, así como la ANN y la fisiología del sitio.
+
+## Reglas v2 (validación 2008–2026)
+
+Cambios respecto del motor original, validados contra los conteos de campo con la
+métrica de **masa mal ubicada** (diferencia de variación total entre la
+distribución observada y la modelada de la emergencia entre conteos):
+
+| Regla | Original | v2 |
+|---|---|---|
+| Termoinhibición (media de 5 días) | 24 °C | **26 °C** |
+| Umbral de choque hídrico (3 días) | 45 mm | **60 mm** |
+| Piso del choque hídrico | 1,0 | **0,5** |
+| Techo desde el 15/04 | 50 %, τ=60 d | **10 % del máximo previo, τ=40 d, I=0,75** |
+| Condición del techo | siempre | **sólo si hubo ≥1 día con flujo ≥0,5 antes del 15/04** |
+
+La condición evita recortar los años de emergencia tardía (en Bordenave 2010 y
+2015, más del 80 % de la emergencia ocurrió después del 10/04).
+
+Evidencia (Lartigau 2026 (1 campaña, clima de pronósticos archivados)): masa mal ubicada media 39,8 % → 31,6 %. En las 14 campañas
+disponibles (Tres Arroyos, Lartigau, Bordenave 2026 y Bordenave 2008–2015) el
+promedio bajó de 43,8 % a ~33 %; el error medio de la curva acumulada, de 7,4 a
+5,6 puntos porcentuales; y el tamaño de los tres pulsos mayores pasó de 0,61 a
+0,96 del observado (mediana). Límites: pocas campañas, parte del clima de
+2026 proviene de pronósticos archivados, y los parámetros se eligieron en parte
+con las mismas campañas. El efecto del piso y del umbral del choque hídrico no
+es estable entre años; Bordenave 2010 sigue mal ubicada (65 %). No se evaluó la
+magnitud absoluta (plantas por m²).
+
+**Interruptor de retorno:** `ModelParameters.legacy()` devuelve los valores
+anteriores (por ejemplo, `run_predweem(weather, model, ModelParameters.legacy())`).
+El perfil de calibración se recalcula porque la huella del modelo incluye
+`core.py`; el perfil anterior queda invalidado por diseño.

@@ -175,8 +175,10 @@ def test_calibration_keeps_lartigau_decay_and_shared_reference(real_data):
     saved = saved_profile()
     assert saved["model_parameters"]["cobertura_pct"] == 75.
     assert saved["model_parameters"]["w_max"] == 18.816
-    assert saved["model_parameters"]["decay_tau_days"] == 60.
-    assert saved["model_parameters"]["decay_cap_fraction"] == .5
+    assert saved["model_parameters"]["decay_tau_days"] == 40.
+    assert saved["model_parameters"]["decay_cap_fraction"] == .1
+    assert saved["model_parameters"]["decay_requiere_senal_previa"] is True
+    assert saved["model_parameters"]["umbral_termoinhibicion"] == 26.
     assert "lartigau_2026_counts.csv" in saved["seasonal_reference"]["campaigns"]
     assert "tresas" not in saved["seasonal_reference"]["campaigns"].lower()
     assert saved["seasonal_reference"]["excluded_years"] == ["2010", "2015"]

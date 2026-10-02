@@ -168,7 +168,7 @@ def build_calibration(observations_path, weather_path, output_path, site="Lartig
             initial_note,
             f"Cobertura de {coverage:g} % y Wmax de {w_max:g} mm son supuestos de la configuración operativa; el archivo no informa manejo ni cobertura.",
             "El archivo FECHA + PLM2 no incluye repeticiones. Se utiliza un piso de ponderación común, no un error de muestreo medido.",
-            "Se conserva el techo del 50 % y decaimiento desde el 15/04 del motor Lartigau. No se incorpora extinción post-pico de otra localidad.",
+            "Se aplican las reglas v2 (termoinhibición 26 °C, choque hídrico 60 mm con piso 0,5 y techo del 10 % con decaimiento desde el 15/04, condicionado a la señal previa) del motor Lartigau. No se incorpora extinción post-pico de otra localidad.",
             "Las ocho series identificadas sólo por año son una referencia compartida; el pool agrega Lartigau 2026 y no constituye una validación local independiente.",
             "La meteorología corresponde a pronósticos MeteoBahía archivados, no a observaciones de estación.",
             "La transformación no crea cohortes en fechas bloqueadas por el motor biofísico.",

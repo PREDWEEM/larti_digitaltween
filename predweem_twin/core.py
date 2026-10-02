@@ -3,6 +3,11 @@
 Conserva las entradas ANN, los filtros y el techo decreciente desde el 15 de
 abril de LOLIUM_LARTIGAU-2026. La normalización parcial y la cobertura diaria
 son extensiones del gemelo, separadas de la calibración externa por sitio.
+
+Reglas v2 (validación 2008-2026, ver MODEL_PROVENANCE.md): termoinhibición
+26 °C, umbral de choque 60 mm, piso del choque 0,5 y techo de decaimiento
+condicionado a la señal previa del 15/04. ``ModelParameters.legacy()`` recupera
+los valores anteriores.
 """
 
 from __future__ import annotations
@@ -20,13 +25,13 @@ from .seasonal import partial_season_normalization, reference_progress
 class ModelParameters:
     cobertura_pct: float = 75.0
     w_max: float = 18.816
-    umbral_termoinhibicion: float = 24.0
-    umbral_choque_hidrico: float = 45.0
+    umbral_termoinhibicion: float = 26.0
+    umbral_choque_hidrico: float = 60.0
     exponente_kr: float = 0.0
     latitud: float = -38.6166
     longitud: float = -61.7000
     latencia_jd: int = 25
-    techo_choque: float = 1.0
+    techo_choque: float = 0.5
     calentamiento_suelo: float = 0.0
     umbral_primer_pico: float = 0.20
     t_base: float = 2.0
@@ -35,10 +40,23 @@ class ModelParameters:
     tt_control: float = 600.0
     tt_limite: float = 800.0
     decay_enabled: bool = True
-    decay_tau_days: float = 60.0
+    decay_tau_days: float = 40.0
     decay_beta: float = 1.0
     decay_intensity: float = 0.75
-    decay_cap_fraction: float = 0.50
+    decay_cap_fraction: float = 0.10
+    decay_requiere_senal_previa: bool = True
+    decay_umbral_senal_previa: float = 0.5
+    decay_min_dias_senal_previa: int = 1
+
+    @classmethod
+    def legacy(cls, **overrides):
+        """Parámetros previos a las reglas v2 (interruptor de retorno)."""
+        return cls(**{**LEGACY_PARAMETERS, **overrides})
+
+
+LEGACY_PARAMETERS = dict(umbral_termoinhibicion=24.0, umbral_choque_hidrico=45.0, techo_choque=1.0,
+    decay_enabled=True, decay_tau_days=60.0, decay_intensity=0.75,
+    decay_cap_fraction=0.50, decay_requiere_senal_previa=False)
 
 
 class PracticalANNModel:
@@ -185,17 +203,26 @@ def apply_cohort_decay(
     first_peak_index: int | None,
     params: ModelParameters,
 ) -> pd.DataFrame:
-    """Conserva el techo original de Lartigau desde el 15/04 de cada año.
+    """Techo decreciente desde el 15/04 de cada año, condicionado a la señal previa.
 
-    Hasta el 14/04 no cambia el flujo. Después, el techo parte del 50 % del
-    máximo previo y decae con tau=60, beta=1 e intensidad=0.75. Si no existe
-    señal positiva previa a abril, el motor original no impone un techo.
+    Hasta el 14/04 no cambia el flujo. Después, el techo parte de una fracción
+    (``decay_cap_fraction``) del máximo previo y decae con ``decay_tau_days``,
+    ``decay_beta`` e ``decay_intensity``.
+
+    Reglas v2: el techo sólo se impone si, antes del 15/04, el propio modelo
+    registró al menos ``decay_min_dias_senal_previa`` días con flujo mayor o
+    igual a ``decay_umbral_senal_previa``. En años de emergencia tardía (sin
+    señal temprana fuerte, p. ej. Bordenave 2010 y 2015) el techo recortaba casi
+    toda la emergencia real. Con ``decay_requiere_senal_previa=False`` se
+    recupera el comportamiento anterior. Si no existe señal positiva previa a
+    abril, nunca se impone un techo.
     """
     df = trajectory.copy()
     df["EMERREL_ANTES_DECAIMIENTO"] = df["EMERREL"].copy()
     df["Dias_Desde_15Abr"] = 0.0
     df["Factor_Decaimiento_15Abr"] = 1.0
     df["Techo_EMERREL_15Abr"] = np.nan
+    df["Techo_Aplicado_15Abr"] = False
     df["Tau_Decaimiento_15Abr_d"] = params.decay_tau_days
     df["Beta_Decaimiento_15Abr"] = params.decay_beta
     df["Intensidad_Decaimiento_15Abr"] = params.decay_intensity
@@ -217,10 +244,17 @@ def apply_cohort_decay(
         factor = (1.0 - intensity) + intensity * np.exp(-((days / tau) ** beta))
         df.loc[after, "Dias_Desde_15Abr"] = days
         df.loc[after, "Factor_Decaimiento_15Abr"] = factor
-        previous_max = float(df.loc[before, "EMERREL"].clip(lower=0).max()) if before.any() else 0.0
-        if previous_max > 0.0:
+        previous = df.loc[before, "EMERREL"].clip(lower=0) if before.any() else pd.Series(dtype=float)
+        previous_max = float(previous.max()) if len(previous) else 0.0
+        strong_days = int((previous >= float(params.decay_umbral_senal_previa)).sum())
+        has_signal = (
+            not params.decay_requiere_senal_previa
+            or strong_days >= int(params.decay_min_dias_senal_previa)
+        )
+        if previous_max > 0.0 and has_signal:
             cap = float(params.decay_cap_fraction) * previous_max * factor
             df.loc[after, "Techo_EMERREL_15Abr"] = cap
+            df.loc[after, "Techo_Aplicado_15Abr"] = True
             df.loc[after, "EMERREL"] = np.minimum(
                 df.loc[after, "EMERREL"].clip(lower=0), cap,
             )

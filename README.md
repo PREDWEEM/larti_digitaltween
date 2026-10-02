@@ -72,7 +72,7 @@ para recuperar los registros tras un reinicio o redespliegue.
 
 La configuración inicial reproduce el original: cobertura 75 %, Wmax 18,816 mm,
 latitud −38,6166, longitud −61,7000, latencia JD 25, termoinhibición de cinco días
-a 24 °C y primer pico mayor que 0,20.
+a 26 °C y primer pico mayor que 0,20 (reglas v2; ver `MODEL_PROVENANCE.md`).
 
 Desde el 15 de abril aplica el techo del 50 % del máximo previo, con decaimiento
 τ=60 días, β=1 e intensidad 0,75. Conserva el balance hídrico y el reloj térmico
