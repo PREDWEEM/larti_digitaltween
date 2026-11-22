@@ -12,6 +12,8 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from acceso import requerir_acceso
+
 # Streamlit puede volver a ejecutar app.py conservando submódulos antiguos en
 # sys.modules. Recargar sólo state dejaría el motor y la asimilación anteriores.
 # La firma invalida esta caché al cambiar cualquier archivo del paquete; en los
@@ -79,6 +81,7 @@ st.set_page_config(
     page_title="PREDWEEM Digital Twin", page_icon="🌱", layout="wide",
     initial_sidebar_state="collapsed",
 )
+requerir_acceso("Gemelo Digital · Lolium Lartigau")
 
 st.markdown(
     """
