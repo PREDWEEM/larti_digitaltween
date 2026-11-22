@@ -33,8 +33,21 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install pandas requests
 
+      - name: Seleccionar campaña por año calendario de Argentina
+        run: |
+          python - <<'PY'
+          import os
+          import update_meteo as actualizador
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
+              env.write(f"CAMPAIGN_YEAR={actualizador.CAMPANIA_ANIO}\n")
+              env.write(f"WEATHER_FILE={actualizador.ARCHIVO_MAESTRO}\n")
+              env.write(f"HISTORICO_FILE={actualizador.ARCHIVO_HISTORICO}\n")
+              env.write(f"ESTADO_FILE={actualizador.ARCHIVO_ESTADO}\n")
+          print("Campaña", actualizador.CAMPANIA_ANIO, "→", actualizador.ARCHIVO_MAESTRO)
+          PY
+
       - name: Actualizar histórico archivado y pronóstico MeteoBahía
-        run: python update_meteo.py
+        run: python update_meteo.py --year "$CAMPAIGN_YEAR"
 
       - name: Validar restauración MeteoBahía
         run: |
@@ -45,11 +58,16 @@ jobs:
           from zoneinfo import ZoneInfo
 
           import pandas as pd
-          from update_meteo import CAMPANIA_END
+          import os
 
-          path = Path("meteo_daily.csv")
-          historico_path = Path("data/meteo_falcon_pronosticos_archivados_2026.csv")
-          estado_path = Path("data/estado_actualizacion_meteo.json")
+          import update_meteo as actualizador
+
+          actualizador.configurar_campania(int(os.environ["CAMPAIGN_YEAR"]))
+          CAMPANIA_START = actualizador.CAMPANIA_START
+          CAMPANIA_END = actualizador.CAMPANIA_END
+          path = Path(os.environ["WEATHER_FILE"])
+          historico_path = Path(os.environ["HISTORICO_FILE"])
+          estado_path = Path(os.environ["ESTADO_FILE"])
           if not path.exists() or not historico_path.exists() or not estado_path.exists():
               raise SystemExit("Faltan el archivo operativo, el histórico o el estado.")
 
@@ -88,11 +106,14 @@ jobs:
           ).date()
           pasadas = fechas.dt.date < hoy
           futuras = fechas.dt.date >= hoy
+          if (fechas.dt.date < CAMPANIA_START).any():
+              raise SystemExit("Hay fechas anteriores al inicio de campaña.")
           if (fechas.dt.date > CAMPANIA_END).any():
               raise SystemExit("Hay fechas posteriores al cierre de campaña.")
           if hoy > CAMPANIA_END and fechas.max().date() != CAMPANIA_END:
               raise SystemExit("La serie cerrada no llega al 1 de octubre.")
-          if not pasadas.any() or (hoy <= CAMPANIA_END and not futuras.any()):
+          sin_historico = not pasadas.any() and hoy > CAMPANIA_START
+          if sin_historico or (hoy <= CAMPANIA_END and not futuras.any()):
               raise SystemExit("Deben existir histórico y pronóstico desde hoy.")
 
           if not df.loc[pasadas, "Fuente"].astype(str).eq(
@@ -145,9 +166,9 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add \
-            meteo_daily.csv \
-            data/estado_actualizacion_meteo.json \
-            data/meteo_falcon_pronosticos_archivados_2026.csv \
+            "$WEATHER_FILE" \
+            "$ESTADO_FILE" \
+            "$HISTORICO_FILE" \
             data/historico_pronosticos/ || true
 
           if git diff --cached --quiet; then

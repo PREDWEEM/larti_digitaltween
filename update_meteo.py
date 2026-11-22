@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Meteorología PREDWEEM Lartigau 2026.
+"""Meteorología PREDWEEM Lartigau, una campaña por año (1/1 al 1/10).
 
 Histórico operativo: pronósticos MeteoBahía archivados (no observaciones).
 Tramo vigente/futuro: MeteoBahía XML de Coronel Falcón.
@@ -20,14 +20,31 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import requests
 
+from campaign import CAMPAIGN_YEAR, campaign_bounds, campaign_file
+
 ZONA_HORARIA = "America/Argentina/Buenos_Aires"
-CAMPANIA_START = date(2026, 1, 1)
-CAMPANIA_END = date(2026, 10, 1)  # Última fecha meteorológica, inclusive.
 TBASE = 2.0
 URL_XML = "https://meteobahia.com.ar/scripts/forecast/for-cf.xml"
-ARCHIVO_MAESTRO = Path("meteo_daily.csv")
-ARCHIVO_HISTORICO = Path("data/meteo_falcon_pronosticos_archivados_2026.csv")
-ARCHIVO_ESTADO = Path("data/estado_actualizacion_meteo.json")
+ARCHIVO_MAESTRO_BASE = Path("meteo_daily.csv")
+ARCHIVO_ESTADO_BASE = Path("data/estado_actualizacion_meteo.json")
+
+
+def archivo_historico_campania(anio: int) -> Path:
+    return Path(f"data/meteo_falcon_pronosticos_archivados_{int(anio)}.csv")
+
+
+def configurar_campania(anio: int) -> None:
+    """Fija fechas y archivos de la campaña; 2026 conserva sus archivos originales."""
+    global CAMPANIA_ANIO, CAMPANIA_START, CAMPANIA_END
+    global ARCHIVO_MAESTRO, ARCHIVO_HISTORICO, ARCHIVO_ESTADO
+    CAMPANIA_START, CAMPANIA_END = campaign_bounds(anio)  # Cierre inclusivo.
+    CAMPANIA_ANIO = int(anio)
+    ARCHIVO_MAESTRO = campaign_file(ARCHIVO_MAESTRO_BASE, anio)
+    ARCHIVO_HISTORICO = archivo_historico_campania(anio)
+    ARCHIVO_ESTADO = campaign_file(ARCHIVO_ESTADO_BASE, anio)
+
+
+configurar_campania(CAMPAIGN_YEAR)
 DIR_PRONOSTICOS = Path("data/historico_pronosticos")
 FUENTE_HISTORICA = "METEOBAHIA_XML_ARCHIVADO"
 FUENTE_PRONOSTICO = "METEOBAHIA_XML_CORONEL_FALCON"
@@ -131,6 +148,9 @@ def normalizar(
 
 
 def leer_archivo_historico() -> pd.DataFrame:
+    if not ARCHIVO_HISTORICO.exists() and hoy_argentina() <= CAMPANIA_START:
+        # Campaña nueva: el archivo se inicia con el primer pronóstico del 1 de enero.
+        return columnas(pd.DataFrame())
     if not ARCHIVO_HISTORICO.exists():
         raise FileNotFoundError(
             f"No existe el histórico requerido: {ARCHIVO_HISTORICO}"
@@ -228,7 +248,8 @@ def validar(total: pd.DataFrame, hoy: date, fin: date) -> None:
 
     pasadas = fechas.dt.date < hoy
     futuras = fechas.dt.date >= hoy
-    if not pasadas.any() or (hoy <= CAMPANIA_END and not futuras.any()):
+    sin_historico = not pasadas.any() and hoy > CAMPANIA_START
+    if sin_historico or (hoy <= CAMPANIA_END and not futuras.any()):
         raise ValueError("Deben existir histórico y pronóstico desde hoy.")
     if not total.loc[pasadas, "Fuente"].astype(str).eq(FUENTE_HISTORICA).all():
         raise ValueError("El histórico no proviene exclusivamente del archivo MeteoBahía.")
@@ -313,8 +334,9 @@ def ejecutar() -> pd.DataFrame:
         "calidad_historica": CALIDAD_HISTORICA,
         "naturaleza_historico": "Pronosticos MeteoBahia archivados; no son observaciones de estacion",
         "archivo_historico": str(ARCHIVO_HISTORICO),
-        "inicio_historico": str(historico["Fecha"].min()),
-        "fin_historico": str(historico["Fecha"].max()),
+        "campania": CAMPANIA_ANIO,
+        "inicio_historico": str(historico["Fecha"].min()) if len(historico) else None,
+        "fin_historico": str(historico["Fecha"].max()) if len(historico) else None,
         "filas_historicas": len(historico),
         "fuente_pronostico": FUENTE_PRONOSTICO if len(pronostico) else None,
         "inicio_pronostico": str(pronostico["Fecha"].min()) if len(pronostico) else None,
@@ -340,12 +362,34 @@ def ejecutar() -> pd.DataFrame:
     return total
 
 
-if __name__ == "__main__":
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Meteorología MeteoBahía Lartigau por campaña.")
+    parser.add_argument(
+        "--year",
+        type=int,
+        default=CAMPAIGN_YEAR,
+        help="Campaña meteorológica; por defecto, el año calendario de Argentina.",
+    )
+    args = parser.parse_args(argv)
+    configurar_campania(args.year)
+    if hoy_argentina() < CAMPANIA_START:
+        print(
+            f"❌ La campaña {args.year} aún no comenzó; no se genera meteorología futura.",
+            file=sys.stderr,
+        )
+        return 1
     try:
         ejecutar()
     except Exception as error:
         print(
-            f"❌ Error: {error}. No se reemplazó meteo_daily.csv.",
+            f"❌ Error: {error}. No se reemplazó {ARCHIVO_MAESTRO}.",
             file=sys.stderr,
         )
-        raise SystemExit(1)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
