@@ -40,3 +40,18 @@ def test_reads_the_alert_the_app_shows():
     assert alerta["status"] in {"disabled", "observed", "started", "watch", "unavailable", "no_signal"}
     assert alerta["horizon_days"] == 7
     assert alerta["campania"] >= 2026
+
+
+def test_test_notice_needs_no_model(monkeypatch, tmp_path):
+    output = tmp_path / "out.txt"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+
+    def forbidden():
+        raise AssertionError("La prueba no debe correr la app")
+
+    monkeypatch.setattr(alerta_inicio, "calcular_alerta", forbidden)
+    assert alerta_inicio.main(["--prueba", "--cuerpo", str(tmp_path / "p.md")]) == 0
+    lines = output.read_text().splitlines()
+    assert "avisar=true" in lines
+    assert any(line.startswith("titulo=Prueba de aviso por email · ") for line in lines)
+    assert (tmp_path / "p.md").read_text().startswith("@PREDWEEM ")

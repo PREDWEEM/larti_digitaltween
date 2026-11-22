@@ -8,6 +8,11 @@ on:
     workflows: ["Actualizar meteorología Lartigau"]
     types: [completed]
   workflow_dispatch:
+    inputs:
+      prueba:
+        description: "Enviar sólo un aviso de prueba por email (no calcula la alerta)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -35,11 +40,14 @@ jobs:
           cache: pip
 
       - name: Instalar dependencias
+        if: ${{ !inputs.prueba }}
         run: python -m pip install -r requirements.txt
 
       - name: Calcular la alerta de inicio
         id: alerta
-        run: python scripts/alerta_inicio.py --cuerpo alerta_inicio.md
+        env:
+          PRUEBA: ${{ inputs.prueba && '--prueba' || '' }}
+        run: python scripts/alerta_inicio.py --cuerpo alerta_inicio.md $PRUEBA
 
       - name: Avisar por email (issue)
         if: steps.alerta.outputs.avisar == 'true'

@@ -79,12 +79,41 @@ def cuerpo_aviso(alerta: dict, sitio: str) -> str:
     ])
 
 
+def aviso_de_prueba(sitio: str, momento: str) -> tuple[str, str]:
+    titulo = f"Prueba de aviso por email · {sitio} · {momento}"
+    cuerpo = "\n".join([
+        f"@{GITHUB_USUARIO} Prueba del aviso automático de inicio de emergencia "
+        f"del gemelo de Lolium {sitio}.",
+        "",
+        "Si recibió este mensaje por email, el canal funciona. No es una alerta real:",
+        "puede cerrar este issue.",
+        "",
+        f"- Gemelo: {APP_URL}",
+    ])
+    return titulo, cuerpo
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--cuerpo", default="alerta_inicio.md", help="Archivo para el texto del aviso.")
+    parser.add_argument("--prueba", action="store_true", help="Genera un aviso de prueba sin calcular la alerta.")
     args = parser.parse_args(argv)
 
     sitio = nombre_sitio()
+    if args.prueba:
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        momento = datetime.now(ZoneInfo("America/Argentina/Buenos_Aires")).strftime("%d/%m/%Y %H:%M")
+        titulo, cuerpo = aviso_de_prueba(sitio, momento)
+        Path(args.cuerpo).write_text(cuerpo + "\n", encoding="utf-8")
+        salida = os.environ.get("GITHUB_OUTPUT")
+        if salida:
+            with open(salida, "a", encoding="utf-8") as handle:
+                handle.write("avisar=true\n")
+                handle.write(f"titulo={titulo}\n")
+        print(titulo)
+        return 0
     alerta = calcular_alerta()
     avisar = alerta.get("status") == "watch"
     print(json.dumps(alerta, ensure_ascii=False, indent=2))
