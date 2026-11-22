@@ -31,8 +31,12 @@ def emails_autorizados() -> set[str]:
 
 
 def _modo_pruebas() -> bool:
-    """Sólo la suite de pruebas puede omitir el ingreso, nunca el despliegue."""
-    return os.environ.get("PREDWEEM_ACCESO_PRUEBAS") == "1" and "pytest" in sys.modules
+    """Sólo la ejecución local sin servidor (AppTest: pruebas y cálculo de la
+    alerta por email) puede omitir el ingreso; nunca el despliegue web."""
+    return (
+        os.environ.get("PREDWEEM_ACCESO_PRUEBAS") == "1"
+        and "streamlit.testing.v1" in sys.modules
+    )
 
 
 def requerir_acceso(nombre_app: str) -> None:

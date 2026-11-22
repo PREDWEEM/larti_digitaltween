@@ -384,3 +384,13 @@ server_metadata_url = "https://accounts.google.com/.well-known/openid-configurat
 Sin la sección `[auth]` la app no deja ingresar a nadie. La tarea "Mantener
 activo" considera despierta la app cuando muestra la pantalla de ingreso.
 El código y los datos siguen siendo públicos mientras el repositorio sea público.
+
+## Aviso por email de la alerta de inicio
+
+Después de cada actualización meteorológica, el workflow `Alerta de inicio por email`
+corre la app sin navegador (`scripts/alerta_inicio.py`), con la campaña actual, la
+fecha de hoy y los parámetros por defecto, y lee la alerta preventiva de inicio.
+Si el modelo prevé el inicio de la emergencia dentro de los próximos 7 días, abre un
+issue con la etiqueta `alerta-inicio` asignado a la cuenta del repositorio; GitHub
+lo envía por email. Se avisa una sola vez por campaña. No usa los conteos ni la
+cobertura cargados en la app, que viven en la base local del despliegue.
