@@ -15,6 +15,7 @@ ROOT = Path(__file__).parents[1]
 
 def test_hot_update_reloads_snapshot_motor_assimilation_and_store(monkeypatch, tmp_path):
     shutil.copy2(ROOT / "app.py", tmp_path / "app.py")
+    shutil.copy2(ROOT / "campaign.py", tmp_path / "campaign.py")
     shutil.copy2(ROOT / "meteo_daily.csv", tmp_path / "meteo_daily.csv")
     for directory in ("models", "predweem_twin", "data"):
         shutil.copytree(ROOT / directory, tmp_path / directory,

@@ -18,7 +18,10 @@ import streamlit as st
 # reruns normales se conservan los mismos módulos y recursos.
 RUNTIME_REVISION = sha256(b"".join(
     path.name.encode("utf-8") + b"\0" + path.read_bytes() + b"\0"
-    for path in sorted((Path(__file__).parent / "predweem_twin").glob("*.py"))
+    for path in sorted([
+        *(Path(__file__).parent / "predweem_twin").glob("*.py"),
+        Path(__file__).parent / "campaign.py",
+    ])
 )).hexdigest()
 
 
@@ -26,6 +29,7 @@ RUNTIME_REVISION = sha256(b"".join(
 def load_runtime(revision):
     """Activa una versión coherente de los módulos locales, en orden de dependencia."""
     importlib.invalidate_caches()
+    importlib.reload(importlib.import_module("campaign"))
     for name in (
         "assimilation", "coverage", "seasonal", "core", "calibration",
         "observations", "flows", "state", "weather", "onset", "charts",
@@ -39,6 +43,7 @@ def load_runtime(revision):
 
 load_runtime(RUNTIME_REVISION)
 
+from campaign import CAMPAIGN_YEARS, campaign_weather_path, initial_campaign_year
 from predweem_twin.assimilation import assimilate_observations
 from predweem_twin.charts import annual_historical_reference, trajectory_charts
 from predweem_twin.calibration import (
@@ -143,6 +148,11 @@ with st.expander("Configuración del gemelo", expanded=True):
         st.markdown("**Lote y fecha**")
         site_id = st.text_input("Identificador del lote", "Lartigau-01")
         calibration_site = st.selectbox("Localidad del lote", ["Lartigau", "Otra localidad"])
+        campaign_year = st.selectbox(
+            "Campaña meteorológica", CAMPAIGN_YEARS,
+            index=CAMPAIGN_YEARS.index(initial_campaign_year(BASE)), key="campaign_year",
+            help="Cada campaña usa su propia meteorología, del 1 de enero al 1 de octubre.",
+        )
         latitude = st.number_input("Latitud", value=-38.6166, format="%.6f")
         longitude = st.number_input("Longitud", value=-61.7000, format="%.6f")
         # La fecha necesita la meteorología; se reserva aquí su lugar visible.
@@ -207,11 +217,19 @@ with st.expander("Configuración del gemelo", expanded=True):
 
 try:
     if source_option == "Open-Meteo":
-        weather = load_open_meteo(latitude, longitude, f"{date.today().year}-01-01")
+        weather = load_open_meteo(latitude, longitude, f"{campaign_year}-01-01")
     elif source_option == "Cargar archivo" and uploaded_weather is not None:
-        weather = read_weather_file(uploaded_weather)
+        weather = read_weather_file(uploaded_weather, campaign_year=campaign_year)
     else:
-        weather = read_weather_file(BASE / "meteo_daily.csv")
+        weather_path = BASE / campaign_weather_path(campaign_year)
+        if not weather_path.exists():
+            st.info(
+                f"Todavía no hay meteorología de la campaña {campaign_year}. "
+                "La actualización automática la incorporará desde el 1 de enero de ese año; "
+                "también puede usar Open-Meteo o cargar un archivo propio."
+            )
+            st.stop()
+        weather = read_weather_file(weather_path, campaign_year=campaign_year)
 except Exception as error:
     st.error(f"No fue posible cargar la meteorología: {error}")
     st.stop()
@@ -228,6 +246,7 @@ as_of = date_control.date_input(
     value=default_date,
     min_value=min_date,
     max_value=max_state_date,
+    key=f"state_date_{campaign_year}",
 )
 weather, forecast_metadata = operational_weather_window(
     weather, as_of=as_of, forecast_days=7
@@ -248,8 +267,8 @@ reference_2026_from = pd.Timestamp(seasonal_reference["Referencia_2026_Desde"].i
 store = load_store()
 coverage_observations = store.coverage_observations(site_id)
 active_coverage = coverage_observations[
-    pd.to_datetime(coverage_observations["Fecha"], errors="coerce")
-    <= pd.Timestamp(as_of)
+    (pd.to_datetime(coverage_observations["Fecha"], errors="coerce") <= pd.Timestamp(as_of))
+    & (pd.to_datetime(coverage_observations["Fecha"], errors="coerce").dt.year == campaign_year)
 ].copy()
 coverage_series_for_model = (
     active_coverage
@@ -324,7 +343,7 @@ forecast_end_label = (
     else "sin pronóstico"
 )
 st.caption(
-    "Campaña meteorológica cerrada al 01/10/2026."
+    f'Campaña meteorológica cerrada al {forecast_metadata["campaign_end"]:%d/%m/%Y}.'
     if forecast_metadata["campaign_closed"] else
     f'Meteorología histórica hasta **{pd.Timestamp(as_of).strftime("%d/%m/%Y")}** · '
     f'pronóstico disponible: **{forecast_metadata["forecast_days_available"]}/{forecast_metadata["forecast_days_expected"]} días** '

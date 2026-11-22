@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 import requests
 
-from campaign import CAMPANIA_END
+from campaign import campaign_bounds
 
 
 def _weather_date_column(frame: pd.DataFrame) -> str:
@@ -19,12 +19,18 @@ def _weather_date_column(frame: pd.DataFrame) -> str:
 
 
 
-def limit_weather_to_campaign(frame: pd.DataFrame) -> pd.DataFrame:
-    """Excluye fechas posteriores al cierre, también en archivos del usuario."""
+def limit_weather_to_campaign(frame: pd.DataFrame, campaign_year: int | None = None) -> pd.DataFrame:
+    """Aísla el año de campaña y su cierre, también en archivos del usuario."""
     dates = pd.to_datetime(frame[_weather_date_column(frame)], errors="coerce").dt.tz_localize(None)
-    result = frame.loc[dates.dt.date <= CAMPANIA_END].copy()
+    if campaign_year is None:
+        years = dates.dropna().dt.year.unique()
+        if len(years) != 1:
+            raise ValueError("Indique una campaña para meteorología vacía o de varios años.")
+        campaign_year = int(years[0])
+    start, end = campaign_bounds(campaign_year)
+    result = frame.loc[dates.dt.date.between(start, end)].copy()
     if result.empty:
-        raise ValueError("No hay datos meteorológicos hasta el 01/10/2026.")
+        raise ValueError(f"No hay datos meteorológicos entre {start:%d/%m/%Y} y {end:%d/%m/%Y}.")
     return result.reset_index(drop=True)
 
 def forecast_mask(frame: pd.DataFrame) -> pd.Series:
@@ -66,7 +72,8 @@ def operational_weather_window(
     if int(forecast_days) < 1:
         raise ValueError("El horizonte de pronóstico debe ser al menos un día.")
     date_column = _weather_date_column(frame)
-    prepared = limit_weather_to_campaign(frame)
+    selected_year = pd.Timestamp(as_of).year if as_of is not None else None
+    prepared = limit_weather_to_campaign(frame, campaign_year=selected_year)
     prepared[date_column] = pd.to_datetime(
         prepared[date_column], errors="coerce"
     ).dt.tz_localize(None)
@@ -76,7 +83,7 @@ def operational_weather_window(
         if as_of is not None
         else pd.Timestamp(last_observed_weather_date(prepared)).normalize()
     )
-    campaign_end = pd.Timestamp(CAMPANIA_END)
+    campaign_end = pd.Timestamp(campaign_bounds(cutoff.year)[1])
     cutoff = min(cutoff, campaign_end)
     horizon_end = min(cutoff + pd.Timedelta(days=int(forecast_days)), campaign_end)
     expected_dates = pd.date_range(cutoff + pd.Timedelta(days=1), horizon_end, freq="D")
@@ -87,6 +94,7 @@ def operational_weather_window(
         "as_of": cutoff,
         "forecast_end": future_dates.max() if available else None,
         "campaign_end": campaign_end,
+        "campaign_year": cutoff.year,
         "campaign_closed": cutoff >= campaign_end,
         "forecast_days_requested": int(forecast_days),
         "forecast_days_expected": len(expected_dates),
@@ -95,14 +103,14 @@ def operational_weather_window(
     }
 
 
-def read_weather_file(source) -> pd.DataFrame:
+def read_weather_file(source, *, campaign_year: int | None = None) -> pd.DataFrame:
     if hasattr(source, "name"):
         suffix = Path(source.name).suffix.lower()
     else:
         suffix = Path(source).suffix.lower()
     if suffix in {".xlsx", ".xls"}:
-        return limit_weather_to_campaign(pd.read_excel(source))
-    return limit_weather_to_campaign(pd.read_csv(source))
+        return limit_weather_to_campaign(pd.read_excel(source), campaign_year=campaign_year)
+    return limit_weather_to_campaign(pd.read_csv(source), campaign_year=campaign_year)
 
 
 def _today_argentina():
@@ -115,9 +123,12 @@ def fetch_open_meteo(latitude: float, longitude: float, start_date, forecast_day
         raise ValueError("El horizonte Open-Meteo debe estar entre 1 y 16 días.")
     start = pd.Timestamp(start_date).date()
     today = _today_argentina()
-    end = min(today + timedelta(days=int(forecast_days) - 1), CAMPANIA_END)
+    campaign_end = campaign_bounds(start.year)[1]
+    if start > today:
+        raise ValueError(f"La campaña {start.year} aún no comenzó; requiere su propia meteorología.")
+    end = min(today + timedelta(days=int(forecast_days) - 1), campaign_end)
     if start > end:
-        raise ValueError("La fecha inicial supera el cierre del 01/10/2026.")
+        raise ValueError(f"La fecha inicial supera el cierre del {campaign_end:%d/%m/%Y}.")
     history_end = min(today - timedelta(days=6), end)
     daily = "temperature_2m_max,temperature_2m_min,precipitation_sum"
     payloads = []
@@ -172,7 +183,7 @@ def fetch_open_meteo(latitude: float, longitude: float, start_date, forecast_day
     )
 
     result = result.loc[result["Fecha"].dt.date >= start]
-    return limit_weather_to_campaign(result)
+    return limit_weather_to_campaign(result, campaign_year=start.year)
 
 
 def weather_source_label(df: pd.DataFrame) -> str:
