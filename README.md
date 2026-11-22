@@ -360,3 +360,27 @@ La aplicación incluye un selector de campaña; abre la campaña actual en cuant
 tiene meteorología y, hasta entonces, la última campaña con datos.
 Para regenerar una campaña concreta: `python update_meteo.py --year 2026`.
 El actualizador rechaza una campaña que aún no comenzó.
+
+## Acceso restringido
+
+La app sólo se abre para la cuenta Google autorizada (`chantreguillermo@gmail.com`).
+El ingreso usa `st.login` (Google OpenID Connect) y la verificación está en `acceso.py`.
+Las credenciales van en los secretos de la app en Streamlit Community Cloud
+(Settings → Secrets), nunca en el repositorio:
+
+```toml
+[auth]
+redirect_uri = "https://<subdominio-de-la-app>.streamlit.app/oauth2callback"
+cookie_secret = "<texto aleatorio largo>"
+client_id = "<client id de Google>"
+client_secret = "<client secret de Google>"
+server_metadata_url = "https://accounts.google.com/.well-known/openid-configuration"
+
+# Opcional: reemplaza la lista de emails autorizados.
+# [acceso]
+# emails = ["chantreguillermo@gmail.com"]
+```
+
+Sin la sección `[auth]` la app no deja ingresar a nadie. La tarea "Mantener
+activo" considera despierta la app cuando muestra la pantalla de ingreso.
+El código y los datos siguen siendo públicos mientras el repositorio sea público.

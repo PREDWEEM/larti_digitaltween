@@ -19,7 +19,13 @@ MAX_WAIT_SECONDS = 300
 
 
 def app_is_ready(frame):
-    """El gráfico y los indicadores deben existir en el mismo documento."""
+    """El gráfico y los indicadores deben existir en el mismo documento.
+
+    Con acceso restringido, la visita anónima llega a la pantalla de ingreso:
+    la app está despierta aunque los indicadores no se muestren.
+    """
+    if frame.get_by_role("button", name="Ingresar con Google", exact=True).is_visible():
+        return True
     return (
         frame.get_by_role("heading", name=HEADING, exact=True).is_visible()
         and frame.get_by_text("Emergencia estimada", exact=True).is_visible()
